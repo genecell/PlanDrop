@@ -1,6 +1,6 @@
 # PlanDrop
 
-**Drop markdown prompts from your browser to projects on remote servers — your AI coding agent reads and implements.**
+**Drop markdown prompts from your browser to projects on remote servers. Your AI coding agent reads and implements.**
 
 A Chrome extension for developers running AI coding agents (Claude Code, Aider, Cursor, etc.) on remote machines. Plan in your browser, send to your server, execute with AI.
 
@@ -77,11 +77,11 @@ One click to drop a prompt into any project on any server.
 ### 2. Prompts as persistent files
 
 Every prompt you send is saved as a `.md` file on the server:
-- **Natural backup** — never lose a prompt again
-- **Re-readable** — review what you sent days or weeks later
-- **Re-sendable** — update and resend without retyping
-- **Git-trackable** — commit your prompts alongside your code
-- **Debuggable** — when something goes wrong, see exactly what you asked for
+- **Natural backup** - never lose a prompt again
+- **Re-readable** - review what you sent days or weeks later
+- **Re-sendable** - update and resend without retyping
+- **Git-trackable** - commit your prompts alongside your code
+- **Debuggable** - when something goes wrong, see exactly what you asked for
 
 Unlike copy-paste into a terminal, which vanishes the moment you close the window.
 
@@ -107,10 +107,10 @@ The file lands in your project directory. Your AI coding agent reads it and gets
 
 Developers running AI coding agents on remote machines:
 
-- **ML engineers** — GPU servers, training clusters
-- **Bioinformaticians** — HPC nodes, shared compute
-- **DevOps / SREs** — cloud VMs, containers
-- **Anyone with a remote dev setup** — lab servers, cloud instances
+- **ML engineers** - GPU servers, training clusters
+- **Bioinformaticians** - HPC nodes, shared compute
+- **DevOps / SREs** - cloud VMs, containers
+- **Anyone with a remote dev setup** - lab servers, cloud instances
 
 If you SSH into a machine to run Claude Code, Aider, Cursor, or similar tools, PlanDrop saves you time.
 
@@ -133,21 +133,21 @@ PlanDrop extension  ──→  Native host  ──→  SCP/SSH  ──→  ~/pro
 - Multi-server, multi-project configuration with defaults (★)
 - One-click send to any configured project directory
 - Custom filenames (default: `plan.md`)
-- File collision detection — warns before overwriting
+- File collision detection - warns before overwriting
 - Settings import/export (JSON) for sharing across machines
 
 **Editor:**
 - Built-in markdown editor with live preview
 - Split / Edit / Preview toggle modes
 - Clipboard auto-fill on popup open
-- Draft auto-save — remembers content even when popup closes
+- Draft auto-save - remembers content even when popup closes
 
 **Extras:**
 - Right-click context menu: "Send selection to PlanDrop"
 - Cross-platform: macOS, Linux, Windows
 - Works with Chrome, Edge, Brave, Arc, and other Chromium browsers
 
-**Note:** While PlanDrop is designed for markdown prompts, it can send any text file — Python scripts, shell scripts, R scripts, config files, etc. Just change the filename extension in the popup (e.g., `script.py`, `config.yaml`, `run.sh`).
+**Note:** While PlanDrop is designed for markdown prompts, it can send any text file: Python scripts, shell scripts, R scripts, config files, etc. Just change the filename extension in the popup (e.g., `script.py`, `config.yaml`, `run.sh`).
 
 ## SSH Setup
 
@@ -196,7 +196,7 @@ Use Claude.ai, ChatGPT, or any AI assistant to develop your implementation plan:
 
 1. Copy the plan (`Ctrl+C`)
 2. Click the PlanDrop extension icon
-3. Plan auto-fills from clipboard — review/edit if needed
+3. Plan auto-fills from clipboard, review/edit if needed
 4. Select target: **Lab GPU Server → ml-training**
 5. Click **Send → Server**
 
@@ -292,12 +292,12 @@ Each browser gets its own Extension ID. Pass all IDs to the installer:
 
 ## Security & Privacy
 
-- **Write-only** — PlanDrop can send files to your server but cannot read, list, or download files from it
-- **No third-party servers** — all data flows directly from your browser → local native host → your server via SSH
-- **No analytics or telemetry** — zero external network requests
-- **SSH keys stay with your OS** — the extension never sees or accesses your SSH credentials. The native host uses your existing SSH agent
-- **Sandboxed extension** — Chrome's native messaging protocol means the extension cannot access your filesystem or run commands directly. Only the native host (which you install and control) has SSH access
-- **Open source** — full source code available for audit
+- **Write-only** - PlanDrop can send files to your server but cannot read, list, or download files from it
+- **No third-party servers** - all data flows directly from your browser → local native host → your server via SSH
+- **No analytics or telemetry** - zero external network requests
+- **SSH keys stay with your OS** - the extension never sees or accesses your SSH credentials. The native host uses your existing SSH agent
+- **Sandboxed extension** - Chrome's native messaging protocol means the extension cannot access your filesystem or run commands directly. Only the native host (which you install and control) has SSH access
+- **Open source** - full source code available for audit
 
 ## Troubleshooting
 
@@ -332,7 +332,7 @@ Each browser gets its own Extension ID. Pass all IDs to the installer:
 
 ### Editor content disappeared
 
-- This should no longer happen — drafts auto-save. If it does, refresh PlanDrop from your browser's extensions page.
+- This should no longer happen. Drafts auto-save. If it does, refresh PlanDrop from your browser's extensions page.
 - Use the "📋 Paste" button to re-fill from clipboard.
 - Click "Clear" to start fresh.
 
