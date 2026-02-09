@@ -292,7 +292,7 @@ Each browser gets its own Extension ID. Pass all IDs to the installer:
 
 ## Security & Privacy
 
-- **Write-only** - PlanDrop can send files to your server but cannot read, list, or download files from it
+- **Write-only** - PlanDrop can send files to your server and check if a file already exists at the destination path (for collision detection). It cannot read file contents, list directories, or download files from your server
 - **No third-party servers** - all data flows directly from your browser → local native host → your server via SSH
 - **No analytics or telemetry** - zero external network requests
 - **SSH keys stay with your OS** - the extension never sees or accesses your SSH credentials. The native host uses your existing SSH agent
