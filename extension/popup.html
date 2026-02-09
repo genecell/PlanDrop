@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>PlanDrop</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <h1>PlanDrop</h1>
+      <button id="settings-btn" class="icon-btn" title="Settings">⚙️</button>
+    </div>
+
+    <!-- No servers configured message -->
+    <div id="no-config" class="no-config hidden">
+      <p>No servers configured yet.</p>
+      <button id="setup-btn" class="btn btn-primary">Open Settings</button>
+    </div>
+
+    <!-- Main content -->
+    <div id="main-content" class="main-content">
+      <!-- Left panel: Server/Project selection -->
+      <div class="left-panel">
+        <div class="form-group">
+          <label for="server-select">Server</label>
+          <select id="server-select">
+            <option value="">Select server...</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="project-select">Project</label>
+          <select id="project-select" disabled>
+            <option value="">Select project...</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="filename-input">Filename</label>
+          <input type="text" id="filename-input" value="plan.md" placeholder="plan.md">
+        </div>
+
+        <button id="set-default-btn" class="btn btn-secondary btn-small">
+          ★ Set as Default
+        </button>
+      </div>
+
+      <!-- Right panel: Editor -->
+      <div class="right-panel">
+        <!-- Toolbar: View mode toggle + actions -->
+        <div class="editor-toolbar">
+          <div class="view-toggle">
+            <button class="toggle-btn active" data-mode="split">Split</button>
+            <button class="toggle-btn" data-mode="edit">Edit</button>
+            <button class="toggle-btn" data-mode="preview">Preview</button>
+          </div>
+          <div class="editor-actions">
+            <button id="paste-btn" class="btn btn-tiny" title="Paste from clipboard">📋 Paste</button>
+            <button id="clear-btn" class="btn btn-tiny" title="Clear editor">✕ Clear</button>
+          </div>
+        </div>
+
+        <!-- Editor area -->
+        <div class="editor-container" data-mode="split">
+          <textarea id="editor" placeholder="Paste your markdown content here..."></textarea>
+          <div id="preview" class="preview"></div>
+        </div>
+
+        <!-- Collision warning -->
+        <div id="collision-warning" class="warning-banner hidden">
+          <span class="warning-icon">⚠️</span>
+          <span id="collision-text">File already exists on server.</span>
+          <div class="warning-actions">
+            <button id="rename-btn" class="btn btn-small">Rename</button>
+            <button id="overwrite-btn" class="btn btn-small btn-danger">Overwrite</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer with status and send button -->
+    <div class="footer">
+      <div id="status" class="status">Ready</div>
+      <button id="send-btn" class="btn btn-primary" disabled>
+        Send → Server
+      </button>
+    </div>
+  </div>
+
+  <script src="lib/marked.min.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

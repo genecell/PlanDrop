@@ -1,0 +1,32 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Dev docs (keep private)
+docs/prompt/
+
+# Editor
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Node (if any)
+node_modules/
+
+# Extension packaging
+*.zip
+*.crx
+*.pem
+
+# Generated files
+extension/icons/generate_icons.py
+
+# Logs
+*.log

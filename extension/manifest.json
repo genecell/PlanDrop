@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "PlanDrop",
+  "version": "1.0.0",
+  "description": "Send planning prompts to remote servers via SSH",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
+    "default_title": "PlanDrop"
+  },
+  "permissions": [
+    "nativeMessaging",
+    "clipboardRead",
+    "storage",
+    "activeTab",
+    "contextMenus"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "options_page": "options.html",
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+P",
+        "mac": "Command+Shift+P"
+      },
+      "description": "Open PlanDrop popup"
+    }
+  }
+}

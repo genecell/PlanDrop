@@ -1,0 +1,9 @@
+{
+  "name": "com.plandrop.host",
+  "description": "PlanDrop - Send prompts to remote server via SSH",
+  "path": "INSTALL_PATH_PLACEHOLDER",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://EXTENSION_ID_PLACEHOLDER/"
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "servers": [
+    {
+      "id": "server1",
+      "name": "Lab GPU Server",
+      "sshType": "alias",
+      "sshTarget": "labgpu",
+      "projects": [
+        {
+          "id": "proj1",
+          "name": "RNA-seq Pipeline",
+          "path": "/home/researcher/projects/rnaseq"
+        },
+        {
+          "id": "proj2",
+          "name": "ML Training",
+          "path": "/home/researcher/ml/experiments"
+        }
+      ],
+      "defaultProjectId": "proj1"
+    },
+    {
+      "id": "server2",
+      "name": "Cloud Box",
+      "sshType": "direct",
+      "sshTarget": "admin@cloud.example.com",
+      "host": "cloud.example.com",
+      "username": "admin",
+      "sshPort": 22,
+      "sshKey": null,
+      "projects": [
+        {
+          "id": "proj3",
+          "name": "Web Dashboard",
+          "path": "/var/www/dashboard"
+        }
+      ],
+      "defaultProjectId": "proj3"
+    }
+  ],
+  "defaultServerId": "server1",
+  "defaultFilename": "plan.md",
+  "autoClipboard": true,
+  "defaultViewMode": "split"
+}

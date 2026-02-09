@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>PlanDrop Settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>PlanDrop Settings</h1>
+    </header>
+
+    <main>
+      <!-- Servers Section -->
+      <section class="section">
+        <div class="section-header">
+          <h2>Servers</h2>
+          <button id="add-server-btn" class="btn btn-primary">+ Add Server</button>
+        </div>
+
+        <div id="servers-list" class="list">
+          <div class="empty-state">No servers configured. Add a server to get started.</div>
+        </div>
+      </section>
+
+      <!-- Server Edit Modal -->
+      <div id="server-modal" class="modal hidden">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3 id="server-modal-title">Add Server</h3>
+            <button class="close-btn" data-close="server-modal">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label for="server-name">Display Name</label>
+              <input type="text" id="server-name" placeholder="e.g., Lab GPU Server">
+            </div>
+
+            <div class="form-group">
+              <label>SSH Connection Type</label>
+              <div class="radio-group">
+                <label class="radio-label">
+                  <input type="radio" name="ssh-type" value="alias" checked>
+                  <span>SSH Config Alias (recommended)</span>
+                </label>
+                <label class="radio-label">
+                  <input type="radio" name="ssh-type" value="direct">
+                  <span>Direct Connection</span>
+                </label>
+              </div>
+            </div>
+
+            <div id="alias-fields">
+              <div class="form-group">
+                <label for="ssh-alias">SSH Alias</label>
+                <input type="text" id="ssh-alias" placeholder="e.g., labgpu (from ~/.ssh/config)">
+                <span class="help-text">Use an alias defined in your ~/.ssh/config file</span>
+              </div>
+            </div>
+
+            <div id="direct-fields" class="hidden">
+              <div class="form-row">
+                <div class="form-group flex-2">
+                  <label for="ssh-host">Hostname / IP</label>
+                  <input type="text" id="ssh-host" placeholder="192.168.1.100">
+                </div>
+                <div class="form-group flex-1">
+                  <label for="ssh-port">Port</label>
+                  <input type="number" id="ssh-port" value="22">
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="ssh-username">Username</label>
+                <input type="text" id="ssh-username" placeholder="user">
+              </div>
+              <div class="form-group">
+                <label for="ssh-key">SSH Key Path (optional)</label>
+                <input type="text" id="ssh-key" placeholder="~/.ssh/id_rsa">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <button id="test-connection-btn" class="btn btn-secondary">
+                Test Connection
+              </button>
+              <span id="test-result" class="test-result"></span>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" data-close="server-modal">Cancel</button>
+            <button id="save-server-btn" class="btn btn-primary">Save Server</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Project Edit Modal -->
+      <div id="project-modal" class="modal hidden">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3 id="project-modal-title">Add Project</h3>
+            <button class="close-btn" data-close="project-modal">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label for="project-name">Project Name</label>
+              <input type="text" id="project-name" placeholder="e.g., RNA-seq Pipeline">
+            </div>
+            <div class="form-group">
+              <label for="project-path">Remote Directory Path</label>
+              <input type="text" id="project-path" placeholder="/home/user/projects/rnaseq">
+              <span class="help-text">Absolute path on the remote server</span>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" data-close="project-modal">Cancel</button>
+            <button id="save-project-btn" class="btn btn-primary">Save Project</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- General Settings -->
+      <section class="section">
+        <h2>General Settings</h2>
+
+        <div class="form-group">
+          <label for="default-filename">Default Filename</label>
+          <input type="text" id="default-filename" value="plan.md">
+        </div>
+
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="auto-clipboard" checked>
+            <span>Auto-fill from clipboard when popup opens</span>
+          </label>
+        </div>
+
+        <div class="form-group">
+          <label for="default-view">Default Editor View</label>
+          <select id="default-view">
+            <option value="split">Split View</option>
+            <option value="edit">Edit Only</option>
+            <option value="preview">Preview Only</option>
+          </select>
+        </div>
+      </section>
+
+      <!-- Import/Export -->
+      <section class="section">
+        <h2>Import / Export</h2>
+        <div class="button-group">
+          <button id="export-btn" class="btn btn-secondary">Export Settings</button>
+          <button id="import-btn" class="btn btn-secondary">Import Settings</button>
+          <input type="file" id="import-file" accept=".json" class="hidden">
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>PlanDrop v1.0.0</p>
+    </footer>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>
