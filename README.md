@@ -6,6 +6,64 @@ A Chrome extension for developers running AI coding agents (Claude Code, Aider, 
 
 ![PlanDrop Screenshot](assets/screenshot.png)
 
+## Quick Start
+
+### Prerequisites
+
+- **Google Chrome** (or see [Browser Support](#browser-support) for Edge/Brave/Arc)
+- **Python 3**: Required for the native messaging host
+- **SSH access**: Key-based SSH access to your remote server(s)
+
+**Platform-specific:**
+- **macOS**: Python 3 is pre-installed on macOS 12.3+. If missing: `brew install python3`
+- **Linux**: Install via package manager: `apt install python3` or `yum install python3`
+- **Windows**: Requires Windows 10 (1809+) or Windows 11 with OpenSSH client enabled (Settings → Apps → Optional Features → OpenSSH Client). Install Python 3 from [python.org](https://www.python.org/downloads/) and ensure it's in PATH.
+
+### Step 1: Clone the repository
+
+```bash
+git clone https://github.com/genecell/PlanDrop.git
+cd PlanDrop
+```
+
+### Step 2: Load the extension in Chrome
+
+1. Go to `chrome://extensions/`
+2. Enable **Developer mode** (toggle in top right)
+3. Click **Load unpacked** → select the `extension/` folder
+4. Note the **Extension ID** shown on the card (you'll need this next)
+
+### Step 3: Install the native messaging host
+
+**macOS / Linux:**
+```bash
+cd native-host
+chmod +x install.sh
+./install.sh <your-extension-id>
+```
+
+**Windows (PowerShell):**
+```powershell
+cd native-host
+.\install.ps1 <your-extension-id>
+```
+
+### Step 4: Configure a server
+
+1. Click the PlanDrop icon in Chrome toolbar
+2. Click the ⚙ gear icon to open Settings
+3. Add a server:
+   - **Name**: `my-gpu-server` (display name)
+   - **SSH target**: `labgpu` (SSH config alias) or `user@192.168.1.100`
+4. Add a project under that server:
+   - **Name**: `ml-training` (display name)
+   - **Remote path**: `/home/user/projects/ml-training`
+5. Click **Set as Default** (optional) → done!
+
+Using Edge, Brave, or Arc? See [Browser Support](#browser-support).
+
+---
+
 ## Why PlanDrop?
 
 ### 1. Eliminate file transfer friction
@@ -87,88 +145,9 @@ PlanDrop extension  ──→  Native host  ──→  SCP/SSH  ──→  ~/pro
 **Extras:**
 - Right-click context menu: "Send selection to PlanDrop"
 - Cross-platform: macOS, Linux, Windows
-- Works with Chrome, Edge, Brave, Arc, and other Chromium browsers (Firefox/Safari not supported)
+- Works with Chrome, Edge, Brave, Arc, and other Chromium browsers
 
 **Note:** While PlanDrop is designed for markdown prompts, it can send any text file — Python scripts, shell scripts, R scripts, config files, etc. Just change the filename extension in the popup (e.g., `script.py`, `config.yaml`, `run.sh`).
-
-## Quick Start
-
-### Prerequisites
-
-- **Browser**: Chrome, Edge, Brave, or another Chromium-based browser
-- **Python 3**: Required for the native messaging host
-- **SSH access**: Key-based SSH access to your remote server(s)
-
-**Platform-specific:**
-- **macOS**: Python 3 is pre-installed on macOS 12.3+. If missing: `brew install python3`
-- **Linux**: Install Python 3 via your package manager (`apt install python3` or `yum install python3`)
-- **Windows**: Requires Windows 10 (1809+) or Windows 11 with OpenSSH client enabled (Settings → Apps → Optional Features → OpenSSH Client). Install Python 3 from [python.org](https://www.python.org/downloads/) and ensure it's in PATH.
-
-### Step 1: Clone the repository
-
-```bash
-git clone https://github.com/genecell/PlanDrop.git
-cd PlanDrop
-```
-
-### Step 2: Load the extension in your browser
-
-**Chrome:**
-1. Go to `chrome://extensions/`
-2. Enable **Developer mode** (toggle in top right)
-3. Click **Load unpacked** → select the `extension/` folder
-4. Note the **Extension ID** shown on the card (you'll need this next)
-
-**Edge:**
-1. Go to `edge://extensions/`
-2. Enable **Developer mode** (toggle in left sidebar)
-3. Click **Load unpacked** → select the `extension/` folder
-4. Note the **Extension ID**
-
-**Brave:**
-1. Go to `brave://extensions/`
-2. Enable **Developer mode** (toggle in top right)
-3. Click **Load unpacked** → select the `extension/` folder
-4. Note the **Extension ID**
-
-### Step 3: Install the native messaging host
-
-**macOS / Linux:**
-```bash
-cd native-host
-chmod +x install.sh
-./install.sh <your-extension-id>
-```
-
-**Windows (PowerShell):**
-```powershell
-cd native-host
-.\install.ps1 <your-extension-id>
-```
-
-The installer auto-detects your OS and browser(s), and registers the native host.
-
-**Using multiple browsers or profiles?** Each gets a different Extension ID. Pass all IDs to the installer:
-
-```bash
-# macOS / Linux
-./install.sh <chrome-id> <edge-id> <brave-id>
-
-# Windows
-.\install.ps1 <chrome-id> <edge-id> <brave-id>
-```
-
-### Step 4: Configure servers and projects
-
-1. Click the PlanDrop icon in your browser toolbar
-2. Click the ⚙ gear icon to open Settings
-3. Add a server:
-   - **Name**: `my-gpu-server` (display name)
-   - **SSH target**: `labgpu` (SSH config alias) or `user@192.168.1.100`
-4. Add a project under that server:
-   - **Name**: `ml-training` (display name)
-   - **Remote path**: `/home/user/projects/ml-training`
-5. Click **Set as Default** (optional) → done!
 
 ## SSH Setup
 
@@ -263,41 +242,62 @@ To avoid re-configuring servers in each profile, use Import/Export in Settings:
 cd ~/PlanDrop
 git pull
 
-# Extension: go to your browser's extensions page and click 🔄 on PlanDrop
-#   Chrome: chrome://extensions/
-#   Edge:   edge://extensions/
-#   Brave:  brave://extensions/
-#
+# Extension: go to chrome://extensions/ and click 🔄 on PlanDrop
 # Native host: automatically picks up the updated script
 # Only re-run install.sh if instructed by release notes
 ```
 
-## Security Model
+## Browser Support
 
+| Browser | Status |
+|---------|--------|
+| Chrome | Fully supported |
+| Edge | Supported (Chromium-based) |
+| Brave | Supported (Chromium-based) |
+| Arc | Supported (Chromium-based) |
+| Firefox | Not supported (different extension API) |
+| Safari | Not supported (requires native Xcode wrapper) |
+
+### Installing on Edge
+
+1. Go to `edge://extensions/`
+2. Enable **Developer mode** (toggle in left sidebar)
+3. Click **Load unpacked** → select the `extension/` folder
+4. Note the **Extension ID**
+5. Run: `./install.sh <edge-extension-id>` (or add to existing IDs)
+
+### Installing on Brave
+
+1. Go to `brave://extensions/`
+2. Enable **Developer mode** (toggle in top right)
+3. Click **Load unpacked** → select the `extension/` folder
+4. Note the **Extension ID**
+5. Run: `./install.sh <brave-extension-id>` (or add to existing IDs)
+
+### Installing on Arc
+
+Arc uses Chrome's extension system. Follow the Chrome instructions but access extensions via Arc's settings menu.
+
+### Using multiple browsers
+
+Each browser gets its own Extension ID. Pass all IDs to the installer:
+
+```bash
+# macOS / Linux
+./install.sh <chrome-id> <edge-id> <brave-id>
+
+# Windows
+.\install.ps1 <chrome-id> <edge-id> <brave-id>
 ```
-What PlanDrop can do:
-  ✓ Write a .md file to a specific path you choose on your server (SCP)
-  ✓ Check if a file already exists at that path (SSH stat)
-  ✓ Test SSH connectivity (SSH echo)
 
-What PlanDrop CANNOT do:
-  ✗ Read any files from your server
-  ✗ List directories
-  ✗ Execute arbitrary commands
-  ✗ Access files outside the paths you configure
-  ✗ Send data anywhere except your own configured servers
+## Security & Privacy
 
-Data flow:
-  Chrome Extension → local Unix pipe → SCP over SSH → your server
-  No data is sent to any third party. Ever.
-
-SSH keys:
-  Never read by PlanDrop. Handled by your OS SSH agent.
-
-Stored data:
-  Server names, SSH aliases, project paths stored in chrome.storage.sync
-  Tip: use SSH config aliases instead of raw IPs for extra privacy
-```
+- **Write-only** — PlanDrop can send files to your server but cannot read, list, or download files from it
+- **No third-party servers** — all data flows directly from your browser → local native host → your server via SSH
+- **No analytics or telemetry** — zero external network requests
+- **SSH keys stay with your OS** — the extension never sees or accesses your SSH credentials. The native host uses your existing SSH agent
+- **Sandboxed extension** — Chrome's native messaging protocol means the extension cannot access your filesystem or run commands directly. Only the native host (which you install and control) has SSH access
+- **Open source** — full source code available for audit
 
 ## Troubleshooting
 
@@ -321,7 +321,7 @@ Stored data:
 
 ### "Add Project" button not working
 
-- Refresh the extension in your browser's extensions page (`chrome://extensions/`, `edge://extensions/`, or `brave://extensions/`) → click 🔄
+- Refresh the extension in your browser's extensions page → click 🔄
 - Try closing and reopening the Settings page
 
 ### Python not found
@@ -336,36 +336,19 @@ Stored data:
 - Use the "📋 Paste" button to re-fill from clipboard.
 - Click "Clear" to start fresh.
 
-## Supported AI Coding Agents
+## Roadmap
 
-PlanDrop works with any terminal-based AI coding tool:
+- [ ] Chrome Web Store release
+- [ ] Keyboard shortcut for quick send
+- [ ] Template system for common prompts
+- [ ] File history / recent sends
 
-- Claude Code
-- Aider
-- Cursor (terminal mode)
-- Continue
-- Cody
-- Copilot in CLI
-- Open Interpreter
-- Any tool that can read a local `.md` file
+## License
 
-## Browser Support
-
-| Browser | Status |
-|---------|--------|
-| Chrome | Fully supported |
-| Edge | Supported (Chromium-based) |
-| Brave | Supported (Chromium-based) |
-| Arc | Supported (Chromium-based) |
-| Firefox | Not supported (different extension API) |
-| Safari | Not supported (requires native Xcode wrapper) |
+BSD-3-Clause
 
 ## Contributing
 
 [github.com/genecell/plandrop](https://github.com/genecell/plandrop)
 
 Issues and PRs welcome.
-
-## License
-
-BSD-3-Clause
