@@ -14,7 +14,7 @@ Complete guide to installing and configuring PlanDrop — the Chrome extension t
 - [Verifying the Setup](#verifying-the-setup)
 - [Permission Profiles](#permission-profiles)
 - [SSH Configuration](#ssh-configuration)
-- [API Key vs Max Subscription](#api-key-vs-max-subscription)
+- [API Key vs Subscription Login](#api-key-vs-subscription-login)
 - [Multi-Browser Setup](#multi-browser-setup)
 - [Troubleshooting](#troubleshooting)
 
@@ -47,12 +47,15 @@ SSH to your server and run the automated setup script:
 
 ```bash
 curl -sL https://raw.githubusercontent.com/genecell/PlanDrop/master/server/setup.sh | bash
+
+# Reload your shell to make plandrop-watch available
+source ~/.bashrc
 ```
 
 This script:
 1. Checks for Node.js and npm
 2. Installs Claude Code globally (`npm install -g @anthropic-ai/claude-code`)
-3. Helps you authenticate with `claude login` (for Max subscription) or warns about API key usage
+3. Helps you authenticate with `claude login` or warns about API key usage
 4. Installs `plandrop-watch` and `plandrop-history` to `~/.local/bin/`
 5. Adds `~/.local/bin` to your PATH if needed
 
@@ -386,23 +389,24 @@ ssh-copy-id labgpu
 
 ---
 
-## API Key vs Max Subscription
+## API Key vs Subscription Login
 
-Claude Code can use either:
-1. **Max Subscription** (free, requires `claude login`)
-2. **API Key** (pay-per-token, uses `ANTHROPIC_API_KEY`)
+Claude Code uses your Anthropic subscription login by default (via `claude login`). However, if `ANTHROPIC_API_KEY` is set in your environment, Claude Code will use that instead, which costs money per token.
 
-### Using Max Subscription (Recommended)
+### Using Subscription Login
 
 ```bash
 # On your server
 claude login
-# Opens browser for OAuth authentication
+
+# Note: if ANTHROPIC_API_KEY is set in your environment,
+# Claude Code will use it instead of your subscription login.
+# To use your subscription, unset it: unset ANTHROPIC_API_KEY
 ```
 
 ### Checking for API Key
 
-If `ANTHROPIC_API_KEY` is set in your environment, Claude Code will use it instead of your Max subscription.
+If `ANTHROPIC_API_KEY` is set in your environment, Claude Code will use it instead of your subscription login.
 
 The watcher warns you on startup:
 ```
@@ -487,7 +491,7 @@ plandrop-watch
 
 **"Credit balance is too low"**
 - ANTHROPIC_API_KEY is set → use `unset ANTHROPIC_API_KEY`
-- Or authenticate with Max: `claude login`
+- Or authenticate with your subscription: `claude login`
 
 **Watcher stuck / not responding**
 ```bash
@@ -516,6 +520,7 @@ plandrop-watch
 ```bash
 # Setup (one-time)
 curl -sL https://raw.githubusercontent.com/genecell/PlanDrop/master/server/setup.sh | bash
+source ~/.bashrc  # Reload shell to make plandrop-watch available
 
 # Initialize project (one-time per project)
 cd /your/project && plandrop-watch --init

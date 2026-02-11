@@ -2,7 +2,7 @@
 
 **A structured plan-review-execute workflow for AI coding agents on remote servers, directly in your browser side panel.**
 
-If you work on remote servers (HPC clusters, GPU nodes, cloud VMs), using AI coding assistants means constantly switching between ChatGPT and SSH terminals. You describe your analysis, copy the code, paste it into the terminal, hit an error, copy the error back. Nothing is saved. Nothing is reproducible. You have no control over what the agent does.
+If you work on remote servers (HPC clusters, GPU nodes, cloud VMs), using AI coding assistants means constantly switching between ChatGPT and SSH terminals. You describe your analysis, copy the code, paste it into the terminal, hit an error, copy the error back. Prompts vanish from your terminal history. There is no structured record of what you asked or what the agent did. You have no control over execution.
 
 PlanDrop fixes this with a minimalist file-queue architecture. No extra servers, no databases, no WebSockets. The Chrome extension uses native messaging to talk to a local Python script. That script uses your existing SSH config (ControlMaster for speed) to push/pull JSON files to a `.plandrop/` directory on your remote server. A simple `watch.sh` script on the server polls for plan files and runs the agent (Claude Code CLI).
 
@@ -27,7 +27,7 @@ PlanDrop fixes this with a minimalist file-queue architecture. No extra servers,
 - [Permission Profiles](#permission-profiles)
 - [SSH Setup](#ssh-setup)
 - [Security and Privacy](#security-and-privacy)
-- [API Key vs Max Subscription](#api-key-vs-max-subscription)
+- [API Key vs Subscription Login](#api-key-vs-subscription-login)
 - [Browser Support](#browser-support)
 - [Multi-Profile Setup](#multi-profile-setup)
 - [Updating](#updating)
@@ -76,11 +76,18 @@ SSH to your server and run:
 # Install Claude Code (requires Node.js)
 npm install -g @anthropic-ai/claude-code
 
-# Login with your Max subscription (recommended over API key)
+# Login with your Anthropic subscription
 claude login
+
+# Note: if ANTHROPIC_API_KEY is set in your environment,
+# Claude Code will use it instead of your subscription login.
+# To use your subscription, unset it: unset ANTHROPIC_API_KEY
 
 # Or use the automated setup script:
 curl -sL https://raw.githubusercontent.com/genecell/PlanDrop/master/server/setup.sh | bash
+
+# Reload your shell to make plandrop-watch available
+source ~/.bashrc
 ```
 
 ### Step 2: Initialize Your Project (per project)
@@ -296,10 +303,10 @@ Interactive mode adds a Chrome side panel for bidirectional communication with C
 3. **Start the watcher on your server**:
    ```bash
    cd ~/projects/your-project
-   # If using conda:
-   conda activate your-env
    # Start in tmux (recommended):
    tmux new -s plandrop
+   # If using conda:
+   conda activate your-env
    plandrop-watch
    ```
 
@@ -458,11 +465,11 @@ The ControlMaster settings enable SSH connection reuse, making PlanDrop's pollin
 
 ---
 
-## API Key vs Max Subscription
+## API Key vs Subscription Login
 
-If you have `ANTHROPIC_API_KEY` set in your environment, Claude Code will use it (costs money per token) instead of your Max subscription login.
+Claude Code uses your Anthropic subscription login by default (via `claude login`). However, if `ANTHROPIC_API_KEY` is set in your environment, Claude Code will use that instead, which costs money per token.
 
-**To use your Max subscription:**
+**To use your subscription login:**
 ```bash
 unset ANTHROPIC_API_KEY
 # Check it's gone:
@@ -588,7 +595,7 @@ git pull
 - Make sure you're in the right project directory
 
 **"Credit balance is too low"**
-- You have ANTHROPIC_API_KEY set. Unset it to use Max subscription (see [API Key vs Max Subscription](#api-key-vs-max-subscription))
+- You have ANTHROPIC_API_KEY set. Unset it to use your subscription login (see [API Key vs Subscription Login](#api-key-vs-subscription-login))
 
 **"Connection error" / Timeouts**
 - First SSH connection takes 3-5 seconds (ControlMaster establishes socket)
