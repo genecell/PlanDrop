@@ -1,0 +1,28 @@
+{
+  "name": "webdev",
+  "description": "Frontend/backend development, API work, containerized apps.",
+  "permission_mode": "acceptEdits",
+  "settings": {
+    "permissions": {
+      "allow": [
+        "Read", "Write", "Edit", "Glob", "Grep",
+        "Bash(python:*)", "Bash(python3:*)",
+        "Bash(node:*)", "Bash(npm:*)", "Bash(npx:*)",
+        "Bash(yarn:*)", "Bash(pnpm:*)", "Bash(bun:*)",
+        "Bash(pip:*)", "Bash(pip3:*)",
+        "Bash(docker:*)", "Bash(docker-compose:*)",
+        "Bash(curl:*)", "Bash(wget:*)",
+        "Bash(pytest:*)", "Bash(jest:*)", "Bash(vitest:*)",
+        "Bash(cat:*)", "Bash(head:*)", "Bash(tail:*)",
+        "Bash(grep:*)", "Bash(find:*)", "Bash(ls:*)",
+        "Bash(mkdir:*)", "Bash(cp:*)", "Bash(mv:*)",
+        "Bash(git:*)", "Bash(make:*)",
+        "Bash(bash:*)", "Bash(sh:*)"
+      ],
+      "deny": [
+        "Bash(sudo:*)",
+        "Bash(rm -rf /*:*)"
+      ]
+    }
+  }
+}

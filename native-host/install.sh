@@ -150,6 +150,8 @@ verify_dependencies() {
 
     if ! command -v python3 &> /dev/null; then
         missing+=("python3")
+    else
+        log_success "Python 3: $(python3 --version 2>&1)"
     fi
 
     if ! command -v ssh &> /dev/null; then
@@ -165,8 +167,49 @@ verify_dependencies() {
         return 1
     fi
 
-    log_success "All dependencies found (python3, ssh, scp)"
+    log_success "SSH tools found (ssh, scp)"
+
+    # Check SSH config
+    if [ -f ~/.ssh/config ]; then
+        log_success "SSH config found at ~/.ssh/config"
+    else
+        log_warning "No SSH config found at ~/.ssh/config"
+        echo "         You'll need to add your server. Example:"
+        echo ""
+        echo "         Host myserver"
+        echo "             HostName 123.45.67.89"
+        echo "             User myuser"
+        echo "             IdentityFile ~/.ssh/id_rsa"
+        echo ""
+    fi
+
     return 0
+}
+
+# Uninstall native host
+uninstall() {
+    local os="$1"
+    local browsers=("chrome" "chromium" "brave" "edge")
+
+    echo ""
+    log_info "Uninstalling PlanDrop native host..."
+    echo ""
+
+    for browser in "${browsers[@]}"; do
+        local manifest_dir
+        manifest_dir=$(get_manifest_paths "$os" "$browser")
+        local manifest_file="$manifest_dir/$MANIFEST_NAME"
+
+        if [ -f "$manifest_file" ]; then
+            rm -f "$manifest_file"
+            log_success "Removed manifest for $browser"
+        fi
+    done
+
+    echo ""
+    log_success "Uninstallation complete!"
+    echo "         Restart your browser(s) to complete the removal."
+    exit 0
 }
 
 # Main installation
@@ -174,8 +217,37 @@ main() {
     echo ""
     echo "========================================"
     echo "  PlanDrop Native Host Installer"
+    echo "  Plan, review, execute — from browser"
     echo "========================================"
     echo ""
+
+    # Detect OS first (needed for uninstall)
+    local os
+    os=$(detect_os)
+    if [ "$os" == "unknown" ]; then
+        log_error "Unsupported operating system. Use install.ps1 for Windows."
+        exit 1
+    fi
+
+    # Handle --uninstall flag
+    if [ "${1:-}" = "--uninstall" ]; then
+        uninstall "$os"
+    fi
+
+    # Handle --help flag
+    if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+        echo "Usage: ./install.sh [OPTIONS] [EXTENSION_ID...]"
+        echo ""
+        echo "Options:"
+        echo "  --help        Show this help"
+        echo "  --uninstall   Remove native host from all browsers"
+        echo ""
+        echo "Examples:"
+        echo "  ./install.sh abcdefghijklmnopqrstuvwxyz"
+        echo "  ./install.sh id1 id2 id3    # Multiple Chrome profiles"
+        echo ""
+        exit 0
+    fi
 
     # Check files exist
     if [ ! -f "$HOST_SCRIPT" ]; then
@@ -183,13 +255,6 @@ main() {
         exit 1
     fi
 
-    # Detect OS
-    local os
-    os=$(detect_os)
-    if [ "$os" == "unknown" ]; then
-        log_error "Unsupported operating system. Use install.ps1 for Windows."
-        exit 1
-    fi
     log_info "Detected OS: $os"
 
     # Verify dependencies

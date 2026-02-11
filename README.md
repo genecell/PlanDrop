@@ -1,39 +1,252 @@
 # PlanDrop
 
-**Drop markdown prompts from your browser to projects on remote servers. Your AI coding agent reads and implements.**
+**A structured plan-review-execute workflow for AI coding agents on remote servers, directly in your browser side panel.**
 
-A Chrome extension for developers running AI coding agents (Claude Code, Aider, Cursor, etc.) on remote machines. Plan in your browser, send to your server, execute with AI.
+If you work on remote servers (HPC clusters, GPU nodes, cloud VMs), using AI coding assistants means constantly switching between ChatGPT and SSH terminals. You describe your analysis, copy the code, paste it into the terminal, hit an error, copy the error back. Nothing is saved. Nothing is reproducible. You have no control over what the agent does.
 
-![PlanDrop Screenshot](assets/screenshot.png)
+PlanDrop fixes this with a minimalist file-queue architecture. No extra servers, no databases, no WebSockets. The Chrome extension uses native messaging to talk to a local Python script. That script uses your existing SSH config (ControlMaster for speed) to push/pull JSON files to a `.plandrop/` directory on your remote server. A simple `watch.sh` script on the server polls for plan files and runs the agent (Claude Code CLI).
+
+## What Makes It Different
+
+- **Enforced oversight**: The agent cannot execute code without you first reviewing a read-only plan and clicking "Execute" in the browser. This is enforced by architecture, not by prompting.
+- **Zero infrastructure**: If you have SSH access, you can use it. Data never touches third-party servers.
+- **Reproducibility**: Every prompt and response is saved as a file you can commit to Git. Full audit trail.
+- **Built for remote scientific computing**: Computational biologists on HPC clusters, ML engineers on GPU servers, anyone working on sensitive remote infrastructure.
+
+## Table of Contents
+
+- [What It Does](#what-it-does)
+- [Quick Start](#quick-start)
+- [Why PlanDrop?](#why-plandrop)
+- [Features](#features)
+- [How It Works](#how-it-works)
+- [Who Is This For?](#who-is-this-for)
+- [Installation](#installation)
+- [Usage: Claude Code (Interactive)](#usage-claude-code-interactive)
+- [Usage: Quick Drop](#usage-quick-drop)
+- [Permission Profiles](#permission-profiles)
+- [SSH Setup](#ssh-setup)
+- [Security and Privacy](#security-and-privacy)
+- [API Key vs Max Subscription](#api-key-vs-max-subscription)
+- [Browser Support](#browser-support)
+- [Multi-Profile Setup](#multi-profile-setup)
+- [Updating](#updating)
+- [Troubleshooting](#troubleshooting)
+- [Roadmap](#roadmap)
+- [License](#license)
+- [Contributing](#contributing)
+
+---
+
+## What It Does
+
+PlanDrop bridges browser-based AI tools and terminal-based Claude Code sessions. Two modes:
+
+**Claude Code (Interactive)**
+Full plan-review-execute workflow:
+1. Type a task in the side panel
+2. Claude Code creates a plan (read-only, no file changes)
+3. Review the plan in the activity feed
+4. Click "Execute" to run it, or "Revise" to adjust
+5. See results, costs, and blocked actions in real-time
+
+**Quick Drop**
+Select text or write markdown in the editor, send as a file to your server's project folder. Claude Code picks it up.
+
+---
 
 ## Quick Start
 
 ### Prerequisites
 
-- **Google Chrome** (or see [Browser Support](#browser-support) for Edge/Brave/Arc)
-- **Python 3**: Required for the native messaging host
-- **SSH access**: Key-based SSH access to your remote server(s)
+**Your computer:**
+- Chrome (or Edge/Brave/Arc)
+- Python 3
+- SSH key access to your server
 
-**Platform-specific:**
-- **macOS**: Python 3 is pre-installed on macOS 12.3+. If missing: `brew install python3`
-- **Linux**: Install via package manager: `apt install python3` or `yum install python3`
-- **Windows**: Requires Windows 10 (1809+) or Windows 11 with OpenSSH client enabled (Settings → Apps → Optional Features → OpenSSH Client). Install Python 3 from [python.org](https://www.python.org/downloads/) and ensure it's in PATH.
+**Your server:**
+- Node.js 18+
+- SSH access
 
-### Step 1: Clone the repository
+### Step 1: Server Setup (one-time)
+
+SSH to your server and run:
 
 ```bash
-git clone https://github.com/genecell/PlanDrop.git
-cd PlanDrop
+# Install Claude Code (requires Node.js)
+npm install -g @anthropic-ai/claude-code
+
+# Login with your Max subscription (recommended over API key)
+claude login
+
+# Or use the automated setup script:
+curl -sL https://raw.githubusercontent.com/genecell/PlanDrop/master/server/setup.sh | bash
 ```
 
-### Step 2: Load the extension in Chrome
+### Step 2: Initialize Your Project (per project)
+
+```bash
+cd /path/to/your/project
+plandrop-watch --init      # Create .plandrop/ directory
+plandrop-watch             # Start watching (foreground, use in tmux)
+# or: plandrop-watch --daemon   # Start in background
+```
+
+### Step 3: Install Chrome Extension (one-time)
+
+**Option A: Chrome Web Store** (when available)
+[Install PlanDrop](link)
+
+**Option B: Manual**
+1. Clone this repo: `git clone https://github.com/genecell/PlanDrop.git`
+2. Open `chrome://extensions`
+3. Enable "Developer Mode"
+4. Click "Load unpacked" and select the `extension/` folder
+5. Note the Extension ID shown
+
+### Step 4: Install Native Messaging Host (one-time)
+
+```bash
+cd native-host
+./install.sh YOUR_EXTENSION_ID
+```
+
+### Step 5: Configure
+
+1. Click PlanDrop icon and open Settings (gear icon)
+2. Add Server:
+   - **Name**: `myserver`
+   - **SSH Target**: `myserver` (must match your `~/.ssh/config` Host name)
+3. Add Project:
+   - **Name**: `my-project`
+   - **Path**: `/path/to/your/project` (same path from Step 2)
+4. Enable "Interactive Mode" and set a permission profile
+
+### Step 6: Use It!
+
+1. Open PlanDrop side panel (click extension icon)
+2. Select your server and project
+3. Green dot = watcher is running
+4. Type a task and click Send
+5. Review Claude Code's plan
+6. Click Execute, Revise, or Cancel
+
+For the complete setup guide with troubleshooting, SSH config examples for HPC clusters and cloud VMs, and advanced configuration, see [docs/setup_instructions.md](docs/setup_instructions.md).
+
+---
+
+## Why PlanDrop?
+
+### Enforced human oversight
+
+The agent cannot execute without your approval. This is structural, not a prompt instruction that can be ignored.
+
+### Interrupt anytime
+
+Realized you sent the wrong prompt? Click Stop to kill the running task immediately.
+
+### Zero infrastructure
+
+No WebSocket servers, no databases, no cloud services. Just SSH, files, and a bash script.
+
+### Reproducibility and audit trail
+
+Every prompt saved as markdown, every response saved as JSONL. Git-trackable.
+
+### Eliminate file transfer friction
+
+Instead of: SSH, navigate to project, create file, paste, save
+
+Just: Click PlanDrop, select project, send
+
+### Prompts as persistent files
+
+Every prompt you send is saved as a `.md` file on the server:
+- **Natural backup**: Never lose a prompt again
+- **Re-readable**: Review what you sent days or weeks later
+- **Re-sendable**: Update and resend without retyping
+- **Git-trackable**: Commit your prompts alongside your code
+- **Debuggable**: When something goes wrong, see exactly what you asked for
+
+### Multi-project routing
+
+Running Claude Code on three different projects across two servers? PlanDrop remembers your servers and projects. Pick from a dropdown, click send. No more SSH juggling.
+
+---
+
+## Features
+
+### Claude Code (Interactive)
+
+- Plan, review, execute workflow with full human oversight
+- Real-time activity feed (Claude's reasoning, file edits, bash commands, costs)
+- Permission profiles (Plan Only, Edit Files Only, Standard, Full Access, Custom)
+- Session continuity across tasks (Claude Code `--resume`)
+- Interrupt/Stop running tasks
+- Multi-server, multi-project dashboard
+- Browser notifications on task completion
+- Cost and duration tracking per task
+
+### Quick Drop
+
+- Markdown editor with live preview (Edit/Split/Preview modes)
+- Send markdown files directly to any project via SCP
+- Custom filenames, file collision detection
+- Clipboard auto-fill, draft auto-save
+
+### General
+
+- Multi-server, multi-project configuration
+- Settings import/export (JSON)
+- Right-click context menu: "Send selection to PlanDrop"
+- Cross-platform: macOS, Linux, Windows
+- Works with Chrome, Edge, Brave, Arc
+
+---
+
+## How It Works
+
+```
+Browser (Chrome Side Panel)
+    | Native Messaging (stdin/stdout)
+Local Machine (plandrop_host.py)
+    | SSH / SCP (reuses ControlMaster socket)
+Remote Server (.plandrop/ directory)
+    | watch.sh polls for plans
+Claude Code CLI (plan -> execute)
+    | JSONL response
+Back to Browser (activity feed)
+```
+
+No WebSocket servers, no databases, no cloud services in between. Uses your existing SSH config. The `.plandrop/` directory is the entire communication layer.
+
+---
+
+## Who Is This For?
+
+Developers running AI coding agents on remote machines:
+
+- **ML engineers**: GPU servers, training clusters
+- **Bioinformaticians**: HPC nodes, shared compute
+- **DevOps/SREs**: Cloud VMs, containers
+- **Anyone with a remote dev setup**: Lab servers, cloud instances
+
+If you SSH into a machine to run Claude Code, Aider, Cursor, or similar tools, PlanDrop saves you time.
+
+---
+
+## Installation
+
+### Extension Setup
 
 1. Go to `chrome://extensions/`
 2. Enable **Developer mode** (toggle in top right)
-3. Click **Load unpacked** → select the `extension/` folder
-4. Note the **Extension ID** shown on the card (you'll need this next)
+3. Click **Load unpacked** and select the `extension/` folder
+4. Note the **Extension ID** shown on the card
 
-### Step 3: Install the native messaging host
+### Native Host Setup
+
+The native messaging host is a Python script that handles SSH communication.
 
 **macOS / Linux:**
 ```bash
@@ -48,130 +261,79 @@ cd native-host
 .\install.ps1 <your-extension-id>
 ```
 
-### Step 4: Configure a server
+### Server Configuration
 
-1. Click the PlanDrop icon in Chrome toolbar
-2. Click the ⚙ gear icon to open Settings
-3. Add a server:
-   - **Name**: `my-gpu-server` (display name)
-   - **SSH target**: `labgpu` (SSH config alias) or `user@192.168.1.100`
-4. Add a project under that server:
-   - **Name**: `ml-training` (display name)
-   - **Remote path**: `/home/user/projects/ml-training`
-5. Click **Set as Default** (optional) → done!
-
-Using Edge, Brave, or Arc? See [Browser Support](#browser-support).
+1. Click the PlanDrop icon and open Settings (gear icon)
+2. Add a server with SSH target (e.g., `labgpu` or `user@host`)
+3. Add projects with remote paths (e.g., `/home/user/myproject`)
+4. For Interactive Mode, enable "Interactive Mode" on the project
 
 ---
 
-## Why PlanDrop?
+## Usage: Claude Code (Interactive)
 
-### 1. Eliminate file transfer friction
+Interactive mode adds a Chrome side panel for bidirectional communication with Claude Code. Instead of just sending files, you can:
 
-Instead of: SSH → navigate to project → create file → paste → save
+- **Plan first, execute after**: Claude analyzes your request and proposes an approach. You review, revise if needed, then approve execution
+- **Real-time progress**: See what Claude is doing as it happens: files created, commands run, errors encountered
+- **Permission profiles**: Control what Claude can do: Plan Only, Edit Files Only, Standard, Full Access, or custom
+- **Dynamic tool approval**: If Claude needs to run a blocked command, approve it from the browser and continue
 
-Just: Click PlanDrop → select project → send
+### Plan-Review-Execute Workflow
 
-One click to drop a prompt into any project on any server.
+1. **Plan Phase**: Send your request. Claude reads your codebase and proposes an implementation plan
+2. **Review**: Read Claude's plan. Click Revise to request changes, or Execute to proceed
+3. **Execute Phase**: Claude implements the plan. Blocked commands appear for approval
+4. **Complete**: See results, costs, and start a new plan
 
-### 2. Prompts as persistent files
+### Setting Up Interactive Mode
 
-Every prompt you send is saved as a `.md` file on the server:
-- **Natural backup** - never lose a prompt again
-- **Re-readable** - review what you sent days or weeks later
-- **Re-sendable** - update and resend without retyping
-- **Git-trackable** - commit your prompts alongside your code
-- **Debuggable** - when something goes wrong, see exactly what you asked for
+1. **In PlanDrop Settings**, enable Interactive Mode for a project and select a permission profile
 
-Unlike copy-paste into a terminal, which vanishes the moment you close the window.
+2. **Initialize the queue on your server**:
+   - In the side panel, click "Setup Queue" to create the `.plandrop/` folder structure
 
-### 3. Multi-project routing
+3. **Start the watcher on your server**:
+   ```bash
+   cd ~/projects/your-project
+   # If using conda:
+   conda activate your-env
+   # Start in tmux (recommended):
+   tmux new -s plandrop
+   plandrop-watch
+   ```
 
-Running Claude Code on three different projects across two servers? PlanDrop remembers your servers and projects. Pick from a dropdown, click send. No more SSH juggling.
+   Or run in background:
+   ```bash
+   plandrop-watch --daemon
+   ```
 
-### 4. Reusability
+4. **Open the side panel**: Click the extension icon or use Chrome's side panel menu
 
-Send the same implementation plan to multiple servers or projects without retyping. Export your server config and import it on another machine.
+5. **Send a plan**: The side panel shows Claude's response in real-time. Click Execute when ready.
 
-## How It Works
+### Dashboard View
 
-```
-1. Plan in browser     →  Claude.ai, ChatGPT, or any AI chat
-2. Send via PlanDrop   →  Copy → click extension → pick target → send
-3. Execute on server   →  claude "read plan.md and implement step by step"
-```
+When you have multiple projects with Interactive Mode enabled, the side panel shows a dashboard:
+- See all interactive projects at a glance
+- Green/red status indicators for each project's watcher
+- Click to open a specific project
+- Per-tab project binding: different browser tabs can be linked to different projects
 
-The file lands in your project directory. Your AI coding agent reads it and gets to work.
+### Session Management
 
-## Who Is This For?
+- **Session continuity**: Claude remembers context across multiple tasks in the same session
+- **Continue in Session**: After a task completes, send follow-up requests without losing context
+- **New Task**: Clear the activity feed but keep the session
+- **Reset**: Start a completely fresh session (clears Claude's memory)
 
-Developers running AI coding agents on remote machines:
+---
 
-- **ML engineers** - GPU servers, training clusters
-- **Bioinformaticians** - HPC nodes, shared compute
-- **DevOps / SREs** - cloud VMs, containers
-- **Anyone with a remote dev setup** - lab servers, cloud instances
+## Usage: Quick Drop
 
-If you SSH into a machine to run Claude Code, Aider, Cursor, or similar tools, PlanDrop saves you time.
+### Example Workflow
 
-## Architecture
-
-```
-Browser                    Local Machine              Remote Server
-───────                    ─────────────              ─────────────
-Claude.ai / ChatGPT
-       ↓ copy
-PlanDrop extension  ──→  Native host  ──→  SCP/SSH  ──→  ~/project/plan.md
-                         (Python)                              ↓
-                                                        AI coding agent
-                                                        reads & executes
-```
-
-## Features
-
-**Core:**
-- Multi-server, multi-project configuration with defaults (★)
-- One-click send to any configured project directory
-- Custom filenames (default: `plan.md`)
-- File collision detection - warns before overwriting
-- Settings import/export (JSON) for sharing across machines
-
-**Editor:**
-- Built-in markdown editor with live preview
-- Split / Edit / Preview toggle modes
-- Clipboard auto-fill on popup open
-- Draft auto-save - remembers content even when popup closes
-
-**Extras:**
-- Right-click context menu: "Send selection to PlanDrop"
-- Cross-platform: macOS, Linux, Windows
-- Works with Chrome, Edge, Brave, Arc, and other Chromium browsers
-
-**Note:** While PlanDrop is designed for markdown prompts, it can send any text file: Python scripts, shell scripts, R scripts, config files, etc. Just change the filename extension in the popup (e.g., `script.py`, `config.yaml`, `run.sh`).
-
-## SSH Setup
-
-PlanDrop uses your existing SSH keys. Recommended setup:
-
-```bash
-# Generate a key if you don't have one
-ssh-keygen -t ed25519
-
-# Copy it to your server
-ssh-copy-id user@192.168.1.100
-
-# Add an alias to ~/.ssh/config (recommended)
-Host labgpu
-    HostName 192.168.1.100
-    User your-username
-    IdentityFile ~/.ssh/id_ed25519
-```
-
-Then use `labgpu` as the SSH target in PlanDrop settings. This keeps your server IP out of Chrome storage.
-
-## Example Workflow
-
-### Step 1: Plan in the browser
+#### Step 1: Plan in the browser
 
 Use Claude.ai, ChatGPT, or any AI assistant to develop your implementation plan:
 
@@ -192,60 +354,125 @@ Use Claude.ai, ChatGPT, or any AI assistant to develop your implementation plan:
 - Rate limiting
 ```
 
-### Step 2: Send via PlanDrop
+#### Step 2: Send via PlanDrop
 
 1. Copy the plan (`Ctrl+C`)
 2. Click the PlanDrop extension icon
 3. Plan auto-fills from clipboard, review/edit if needed
-4. Select target: **Lab GPU Server → ml-training**
-5. Click **Send → Server**
+4. Select target: **Lab GPU Server > ml-training**
+5. Click **Send File**
 
 File saved: `~/projects/ml-training/plan.md`
 
-### Step 3: Execute on server
+#### Step 3: Execute on server
 
 ```bash
 $ ssh labgpu
 $ cd ~/projects/ml-training
-$ claude   # or: aider, cursor, continue, etc.
+$ claude
 
 > read plan.md and implement step by step, testing each phase
 ```
 
 Your AI coding agent reads the plan and implements autonomously.
 
-## Multi-Profile Setup
+---
 
-If you use multiple Chrome profiles:
+## Permission Profiles
 
-**Option A: Chrome Web Store (recommended)**
+Control what Claude Code can do on your server:
 
-Publish as Unlisted ($5 one-time fee) → one fixed Extension ID across all profiles → install native host once.
+| Profile | Description | What Claude Can Do |
+|---------|-------------|-------------------|
+| Plan Only | Read-only analysis | Read files, suggest changes, no execution |
+| Edit Files Only | File modifications only | Read + write files, no shell commands |
+| Standard | General development | Everything except dangerous commands (sudo, rm -rf /, etc.) |
+| Full Access | No restrictions | Everything (use with caution, sandboxed environments only) |
+| Custom | User-defined | Create your own deny list |
 
-**Option B: Self-distribute**
+Create **custom profiles** in Settings to add or block specific commands based on your needs.
 
-Each profile gets a different Extension ID. Collect all IDs and pass them to the installer:
+---
 
-```bash
-./install.sh <profile1-id> <profile2-id> <profile3-id>
-```
+## SSH Setup
 
-To avoid re-configuring servers in each profile, use Import/Export in Settings:
-
-1. Configure everything in one profile
-2. Settings → Export Settings → save JSON
-3. In other profiles → Settings → Import Settings → load the same JSON
-
-## Updating
+PlanDrop uses your `~/.ssh/config` to connect to servers. Recommended setup:
 
 ```bash
-cd ~/PlanDrop
-git pull
+# Generate a key if you don't have one
+ssh-keygen -t ed25519
 
-# Extension: go to chrome://extensions/ and click 🔄 on PlanDrop
-# Native host: automatically picks up the updated script
-# Only re-run install.sh if instructed by release notes
+# Copy it to your server
+ssh-copy-id user@192.168.1.100
 ```
+
+Then add to `~/.ssh/config`:
+
+```ssh-config
+Host myserver
+    HostName 192.168.1.100
+    User your-username
+    IdentityFile ~/.ssh/id_ed25519
+    # Recommended for PlanDrop (connection reuse):
+    ControlMaster auto
+    ControlPath /tmp/ssh-%r@%h:%p
+    ControlPersist 60
+```
+
+The `Host` name (e.g., `myserver`) is what you enter as "SSH Target" in PlanDrop settings.
+
+**Important**: Passwordless SSH must work. Test with:
+```bash
+ssh myserver "echo connected"
+```
+
+If prompted for a password, set up SSH keys:
+```bash
+ssh-copy-id myserver
+```
+
+The ControlMaster settings enable SSH connection reuse, making PlanDrop's polling much faster after the first connection.
+
+---
+
+## Security and Privacy
+
+### Claude Code (Interactive)
+
+- **Controlled read access**: Can read from `.plandrop/responses/` (Claude's output) and `.plandrop/heartbeat` (watcher status). Cannot read arbitrary files on your server
+- **Controlled write access**: Writes to `.plandrop/plans/` (your requests) and `.claude/settings.json` (permission rules). Cannot write to arbitrary locations
+- **Permission profiles**: You control exactly which commands Claude Code can run via deny lists
+
+### Quick Drop
+
+- **Write-only**: PlanDrop can send files to your server and check if a file already exists at the destination path (for collision detection). It cannot read arbitrary file contents, list directories, or download files from your server
+
+### Both Modes
+
+- **No third-party servers**: All data flows directly from your browser to local native host to your server via SSH
+- **No analytics or telemetry**: Zero external network requests
+- **SSH keys stay with your OS**: The extension never sees or accesses your SSH credentials. The native host uses your existing SSH agent
+- **Sandboxed extension**: Chrome's native messaging protocol means the extension cannot access your filesystem or run commands directly. Only the native host (which you install and control) has SSH access
+- **Input validation**: All paths and parameters are validated to prevent command injection attacks
+- **Open source**: Full source code available for audit
+
+---
+
+## API Key vs Max Subscription
+
+If you have `ANTHROPIC_API_KEY` set in your environment, Claude Code will use it (costs money per token) instead of your Max subscription login.
+
+**To use your Max subscription:**
+```bash
+unset ANTHROPIC_API_KEY
+# Check it's gone:
+env | grep ANTHROPIC
+# Remove from ~/.bashrc, ~/.zshrc, or conda activate scripts permanently
+```
+
+watch.sh will warn you on startup if an API key is detected. The side panel will also show a warning if Claude Code reports using an API key.
+
+---
 
 ## Browser Support
 
@@ -262,7 +489,7 @@ git pull
 
 1. Go to `edge://extensions/`
 2. Enable **Developer mode** (toggle in left sidebar)
-3. Click **Load unpacked** → select the `extension/` folder
+3. Click **Load unpacked** and select the `extension/` folder
 4. Note the **Extension ID**
 5. Run: `./install.sh <edge-extension-id>` (or add to existing IDs)
 
@@ -270,7 +497,7 @@ git pull
 
 1. Go to `brave://extensions/`
 2. Enable **Developer mode** (toggle in top right)
-3. Click **Load unpacked** → select the `extension/` folder
+3. Click **Load unpacked** and select the `extension/` folder
 4. Note the **Extension ID**
 5. Run: `./install.sh <brave-extension-id>` (or add to existing IDs)
 
@@ -290,65 +517,115 @@ Each browser gets its own Extension ID. Pass all IDs to the installer:
 .\install.ps1 <chrome-id> <edge-id> <brave-id>
 ```
 
-## Security & Privacy
+---
 
-- **Write-only** - PlanDrop can send files to your server and check if a file already exists at the destination path (for collision detection). It cannot read file contents, list directories, or download files from your server
-- **No third-party servers** - all data flows directly from your browser → local native host → your server via SSH
-- **No analytics or telemetry** - zero external network requests
-- **SSH keys stay with your OS** - the extension never sees or accesses your SSH credentials. The native host uses your existing SSH agent
-- **Sandboxed extension** - Chrome's native messaging protocol means the extension cannot access your filesystem or run commands directly. Only the native host (which you install and control) has SSH access
-- **Open source** - full source code available for audit
+## Multi-Profile Setup
+
+If you use multiple Chrome profiles:
+
+**Option A: Chrome Web Store (recommended)**
+
+Publish as Unlisted ($5 one-time fee) and get one fixed Extension ID across all profiles. Install native host once.
+
+**Option B: Self-distribute**
+
+Each profile gets a different Extension ID. Collect all IDs and pass them to the installer:
+
+```bash
+./install.sh <profile1-id> <profile2-id> <profile3-id>
+```
+
+To avoid re-configuring servers in each profile, use Import/Export in Settings:
+
+1. Configure everything in one profile
+2. Settings > Export Settings > save JSON
+3. In other profiles: Settings > Import Settings > load the same JSON
+
+---
+
+## Updating
+
+```bash
+cd ~/PlanDrop
+git pull
+
+# Extension: go to chrome://extensions/ and click the reload icon on PlanDrop
+# Native host: automatically picks up the updated script
+# Only re-run install.sh if instructed by release notes
+```
+
+---
 
 ## Troubleshooting
 
-### "Send" button stays disabled
+### General Issues
 
+**"Send" button stays disabled**
 - Must select both a server AND a project
-- Add projects in Settings (⚙ icon)
+- Add projects in Settings (gear icon)
 
-### "Connection failed" on Test Connection
-
+**"Connection failed" on Test Connection**
 - Verify SSH works manually: `ssh your-alias "echo ok"`
 - Check that your SSH key is added: `ssh-add -l`
 - On macOS, you may need to add to keychain: `ssh-add --apple-use-keychain ~/.ssh/id_ed25519`
 
-### Extension can't connect to native host
-
+**Extension can't connect to native host**
 - Re-run the installer: `./install.sh <extension-id>` (macOS/Linux) or `.\install.ps1 <extension-id>` (Windows)
 - Verify the Extension ID matches (check your browser's extensions page)
 - Check log file: `~/.plandrop/relay.log` (macOS/Linux) or `%USERPROFILE%\.plandrop\relay.log` (Windows)
 - Make sure the host script is executable: `chmod +x native-host/plandrop_host.py`
 
-### "Add Project" button not working
-
-- Refresh the extension in your browser's extensions page → click 🔄
-- Try closing and reopening the Settings page
-
-### Python not found
-
+**Python not found**
 - **macOS**: Python 3 is pre-installed on macOS 12.3+. If missing: `brew install python3`
 - **Linux**: `sudo apt install python3` or `sudo yum install python3`
 - **Windows**: Install from python.org and ensure it's in PATH
 
-### Editor content disappeared
+### Claude Code Mode Issues
 
-- This should no longer happen. Drafts auto-save. If it does, refresh PlanDrop from your browser's extensions page.
-- Use the "📋 Paste" button to re-fill from clipboard.
-- Click "Clear" to start fresh.
+**"Watcher not running" / Red dot**
+- SSH to your server and check: `ps aux | grep plandrop-watch`
+- Restart: `plandrop-watch`
+- Make sure you're in the right project directory
+
+**"Credit balance is too low"**
+- You have ANTHROPIC_API_KEY set. Unset it to use Max subscription (see [API Key vs Max Subscription](#api-key-vs-max-subscription))
+
+**"Connection error" / Timeouts**
+- First SSH connection takes 3-5 seconds (ControlMaster establishes socket)
+- Subsequent calls reuse the connection and are fast
+- Check SSH config: `ssh your-server` should work without password prompt
+
+**Side panel shows old activity**
+- Activity persists per project. Click "New Task" to start fresh
+- Click "Reset" to clear the session entirely
+
+**Spinner stuck on "Executing..."**
+- Check if watch.sh is still running on server
+- Look at `.plandrop/responses/` for the response file
+- Check watch.sh logs: `tail -f .plandrop/watch.log`
+
+---
 
 ## Roadmap
 
-- [ ] Chrome Web Store release
-- [ ] Keyboard shortcut for quick send
-- [ ] Template system for common prompts
-- [ ] File history / recent sends
+**Planned:**
+- Chrome Web Store release
+- Dark mode
+- Template system for common prompts
+- MCP server integration
+- Multi-agent orchestration across servers
+- Streaming responses
+
+---
 
 ## License
 
 BSD-3-Clause
 
+---
+
 ## Contributing
 
-[github.com/genecell/plandrop](https://github.com/genecell/plandrop)
+[https://github.com/genecell/PlanDrop](https://github.com/genecell/PlanDrop)
 
 Issues and PRs welcome.

@@ -1,15 +1,14 @@
 {
   "manifest_version": 3,
   "name": "PlanDrop",
-  "version": "1.0.0",
-  "description": "Send planning prompts to remote servers via SSH",
+  "version": "2.0.0",
+  "description": "Plan, review, execute. Talks to Claude Code from browser.",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
   "action": {
-    "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
@@ -17,12 +16,18 @@
     },
     "default_title": "PlanDrop"
   },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
   "permissions": [
     "nativeMessaging",
     "clipboardRead",
     "storage",
     "activeTab",
-    "contextMenus"
+    "tabs",
+    "contextMenus",
+    "sidePanel",
+    "notifications"
   ],
   "background": {
     "service_worker": "background.js"
@@ -34,7 +39,7 @@
         "default": "Ctrl+Shift+P",
         "mac": "Command+Shift+P"
       },
-      "description": "Open PlanDrop popup"
+      "description": "Open PlanDrop side panel"
     }
   }
 }

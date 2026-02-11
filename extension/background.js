@@ -62,13 +62,14 @@ function sendNativeMessage(message) {
 
       pendingCallbacks.set(id, { id, resolve, reject });
 
-      // Set timeout
+      // Set timeout - 30 seconds to allow for first SSH connection
+      // Subsequent calls use ControlMaster connection reuse and are fast
       setTimeout(() => {
         if (pendingCallbacks.has(id)) {
           pendingCallbacks.delete(id);
           reject(new Error('Request timed out'));
         }
-      }, 60000); // 60 second timeout
+      }, 30000); // 30 second timeout
 
       port.postMessage(message);
     } catch (e) {
@@ -82,11 +83,14 @@ function sendNativeMessage(message) {
  */
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'native') {
+    console.log('[Background] Native request:', request.payload.action, request.payload);
     sendNativeMessage(request.payload)
       .then((response) => {
+        console.log('[Background] Native response:', response);
         sendResponse({ success: true, data: response });
       })
       .catch((error) => {
+        console.error('[Background] Native error:', error.message);
         sendResponse({ success: false, error: error.message });
       });
     return true; // Keep channel open for async response
@@ -101,33 +105,48 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 /**
- * Context menu setup
+ * Context menu setup and side panel configuration
  */
 chrome.runtime.onInstalled.addListener(() => {
+  // Context menu
   chrome.contextMenus.create({
     id: 'send-to-plandrop',
     title: 'Send to PlanDrop',
     contexts: ['selection']
   });
+
+  // Make extension icon open side panel directly (no popup)
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
+    .catch((error) => console.log('Side panel behavior error:', error));
 });
 
-chrome.contextMenus.onClicked.addListener((info, tab) => {
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === 'send-to-plandrop' && info.selectionText) {
-    // Store selection for popup
-    chrome.storage.local.set({
-      pendingContent: info.selectionText
-    }, () => {
-      // Open popup (by simulating click on extension icon)
-      // Note: Manifest V3 doesn't allow programmatic popup opening
-      // So we'll open as a new tab/window instead
-      chrome.windows.create({
-        url: 'popup.html?source=contextmenu',
-        type: 'popup',
-        width: 650,
-        height: 500
-      });
+    // Store selection and action for side panel to pick up
+    await chrome.storage.session.set({
+      pendingContent: info.selectionText,
+      pendingAction: 'quickdrop' // Go to Quick Drop tab
     });
+
+    // Open side panel
+    if (tab && tab.id) {
+      chrome.sidePanel.open({ tabId: tab.id })
+        .catch((error) => console.log('Could not open side panel:', error));
+    }
   }
+});
+
+/**
+ * Tab activation listener - notify side panel when active tab changes
+ */
+chrome.tabs.onActivated.addListener(async (activeInfo) => {
+  // Broadcast to all extension views (including side panel)
+  chrome.runtime.sendMessage({
+    type: 'tabActivated',
+    tabId: activeInfo.tabId
+  }).catch(() => {
+    // Ignore errors if no listeners (side panel not open)
+  });
 });
 
 console.log('PlanDrop background service worker loaded');

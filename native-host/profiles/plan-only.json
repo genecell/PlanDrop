@@ -1,0 +1,6 @@
+{
+  "name": "plan-only",
+  "description": "Claude reads and analyzes only. No file changes, no commands.",
+  "permission_mode": "plan",
+  "settings": null
+}

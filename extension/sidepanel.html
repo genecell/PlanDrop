@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>PlanDrop Interactive</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <div class="container">
+    <!-- ============================================ -->
+    <!-- DASHBOARD VIEW -->
+    <!-- ============================================ -->
+    <div id="dashboard-view" class="view">
+      <!-- Dashboard Header -->
+      <div class="header">
+        <h1>PlanDrop</h1>
+        <button id="dashboard-settings-btn" class="icon-btn" title="Settings">&#9881;</button>
+      </div>
+
+      <!-- Dashboard Content -->
+      <div class="dashboard-content">
+        <div class="dashboard-title">YOUR PROJECTS</div>
+        <div id="dashboard-projects" class="dashboard-projects">
+          <div class="empty-state">
+            <p>No interactive projects configured.</p>
+            <p class="hint">Enable Interactive Mode in project settings.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- DETAIL VIEW -->
+    <!-- ============================================ -->
+    <div id="detail-view" class="view hidden">
+      <!-- Detail Header with back button -->
+      <div class="header">
+        <button id="back-btn" class="back-btn hidden" title="All Projects">&#8592;</button>
+        <h1>PlanDrop</h1>
+        <button id="settings-btn" class="icon-btn" title="Settings">&#9881;</button>
+      </div>
+
+      <!-- Tab Bar - right after header, Claude Code FIRST (default) -->
+      <div id="tab-bar" class="tab-bar">
+        <button class="tab active" data-tab="claudecode">&#128172; Claude Code</button>
+        <button class="tab" data-tab="quickdrop">&#128221; Quick Drop</button>
+      </div>
+
+      <!-- Shared: Server/Project selectors (visible in both tabs) -->
+      <div id="selector-bar" class="selector-bar">
+        <div class="selector-row">
+          <div class="select-group">
+            <label for="server-select">SERVER</label>
+            <select id="server-select">
+              <option value="">Select server...</option>
+            </select>
+          </div>
+          <div class="select-group">
+            <label for="project-select">PROJECT</label>
+            <select id="project-select" disabled>
+              <option value="">Select project...</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Claude Code only: Collapsible config panel (hidden in Quick Drop) -->
+      <div id="cc-config-bar" class="cc-config-bar">
+        <!-- Collapsed state: one-line summary -->
+        <div id="config-collapsed" class="config-collapsed hidden">
+          <span id="config-dot" class="status-dot disconnected"></span>
+          <span id="config-status-short">Not connected</span>
+          <span class="config-separator">·</span>
+          <span id="config-summary">Plan Only · Opus</span>
+          <button id="config-expand-btn" class="chevron-btn" title="Expand">&#9660;</button>
+        </div>
+
+        <!-- Expanded state: full controls -->
+        <div id="config-expanded" class="config-expanded">
+          <div class="status-bar">
+            <div class="status-indicator">
+              <span id="status-dot" class="status-dot disconnected"></span>
+              <span id="status-text">Not connected</span>
+            </div>
+            <div class="status-right">
+              <span id="phase-indicator" class="phase-indicator hidden"></span>
+              <button id="connect-btn" class="btn btn-small btn-secondary" title="Connect to server">
+                Connect
+              </button>
+            </div>
+          </div>
+          <div class="selector-row">
+            <div class="select-group">
+              <label for="profile-select">PROFILE</label>
+              <select id="profile-select">
+                <option value="plan_only">📋 Plan Only</option>
+                <option value="edit_files">📝 Edit Files Only</option>
+                <option value="standard" selected>⚡ Standard</option>
+                <option value="full_access">🔓 Full Access</option>
+                <option value="custom">⚙️ Custom</option>
+              </select>
+            </div>
+            <div class="select-group">
+              <label for="model-select">MODEL</label>
+              <select id="model-select">
+                <option value="opus">Opus</option>
+                <option value="sonnet">Sonnet</option>
+              </select>
+            </div>
+          </div>
+          <!-- Custom profile editor (hidden by default) -->
+          <div id="custom-profile-editor" class="custom-profile-editor hidden">
+            <div class="custom-editor-header">
+              <label>Blocked Commands</label>
+              <select id="custom-template-select" class="custom-template-select">
+                <option value="standard">Start from: Standard blocks</option>
+                <option value="restrictive">Start from: Restrictive</option>
+                <option value="minimal">Start from: Block all Bash</option>
+                <option value="empty">Start from: Empty (no blocks)</option>
+              </select>
+            </div>
+            <textarea id="custom-deny-list" class="custom-deny-list" placeholder="Enter blocked tool patterns, one per line. Example:
+Bash(sudo:*)
+Bash(rm -rf:*)
+Bash(docker:*)"></textarea>
+            <div class="custom-editor-hint">
+              Use <code>Bash(command:*)</code> to block specific commands. Use <code>Bash</code> alone to block all shell access.
+            </div>
+          </div>
+          <div class="config-collapse-row">
+            <button id="config-collapse-btn" class="chevron-btn" title="Collapse">&#9650;</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Full Access confirmation dialog -->
+      <div id="full-access-dialog" class="confirmation-dialog hidden">
+        <div class="dialog-content">
+          <div class="dialog-icon">⚠️</div>
+          <div class="dialog-title">Enable Full Access?</div>
+          <div class="dialog-message">
+            This removes all command restrictions. Claude will be able to run any command including <code>sudo</code>, <code>rm -rf</code>, and system modifications.
+            <br><br>
+            Only use this in sandboxed or disposable environments.
+          </div>
+          <div class="dialog-actions">
+            <button id="full-access-cancel" class="btn btn-secondary">Cancel</button>
+            <button id="full-access-confirm" class="btn btn-danger">Enable Full Access</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================ -->
+      <!-- TAB: Quick Drop -->
+      <!-- ============================================ -->
+      <div id="tab-quickdrop" class="tab-content hidden">
+        <!-- Editor toolbar -->
+        <div class="editor-toolbar">
+          <div class="view-toggle">
+            <button class="toggle-btn active" data-mode="edit">Edit</button>
+            <button class="toggle-btn" data-mode="split">Split</button>
+            <button class="toggle-btn" data-mode="preview">Preview</button>
+          </div>
+        </div>
+
+        <!-- Editor container -->
+        <div id="qd-editor-container" class="qd-editor-container" data-mode="edit">
+          <textarea id="qd-editor" placeholder="Write or paste your markdown plan..."></textarea>
+          <div id="qd-preview" class="qd-preview"></div>
+        </div>
+
+        <!-- File row: filename + send button on same line -->
+        <div class="qd-file-row">
+          <label for="qd-filename">Filename:</label>
+          <input type="text" id="qd-filename" value="plan.md" placeholder="plan.md">
+          <button id="qd-send-file-btn" class="btn btn-primary" disabled>Send File</button>
+        </div>
+
+        <!-- Collision warning row -->
+        <div class="qd-bottom-row">
+          <div id="qd-collision-warning" class="qd-collision-warning hidden">
+            <span class="warning-icon">&#9888;</span>
+            <span id="qd-collision-text">File exists</span>
+            <button id="qd-overwrite-btn" class="btn btn-tiny btn-danger">Overwrite</button>
+          </div>
+        </div>
+
+        <!-- Status -->
+        <div id="qd-status" class="qd-status"></div>
+      </div>
+
+      <!-- ============================================ -->
+      <!-- TAB: Claude Code -->
+      <!-- ============================================ -->
+      <div id="tab-claudecode" class="tab-content">
+        <!-- Activity feed -->
+        <div id="activity-feed" class="activity-feed">
+          <div class="empty-state">
+            <p>No activity yet.</p>
+            <p class="hint">Select a project and send a plan to get started.</p>
+          </div>
+        </div>
+
+        <!-- Action buttons (shown based on phase) -->
+        <div id="action-buttons" class="action-buttons hidden">
+          <button id="execute-btn" class="btn btn-primary">Execute</button>
+          <button id="revise-btn" class="btn btn-secondary">Revise</button>
+          <button id="cancel-btn" class="btn btn-danger">Cancel</button>
+        </div>
+
+        <!-- Complete actions (shown after completion) -->
+        <div id="new-plan-container" class="new-plan-container hidden">
+          <button id="continue-btn" class="btn btn-primary">Continue in Session</button>
+          <button id="new-plan-btn" class="btn btn-secondary">New Task</button>
+        </div>
+
+        <!-- Blocked commands UI (shown when commands are blocked) -->
+        <div id="blocked-commands" class="blocked-commands hidden">
+          <div class="blocked-header">
+            <span class="blocked-icon">&#9888;</span>
+            <span>Blocked commands:</span>
+          </div>
+          <div id="blocked-list" class="blocked-list"></div>
+          <div class="blocked-actions">
+            <button id="approve-and-rerun-btn" class="btn btn-primary btn-small">Re-run with approved</button>
+            <button id="copy-all-blocked-btn" class="btn btn-secondary btn-small">Copy All</button>
+            <button id="skip-blocked-btn" class="btn btn-secondary btn-small">Skip</button>
+          </div>
+        </div>
+
+        <!-- Watcher setup instructions (shown when not running) -->
+        <div id="watcher-setup" class="watcher-setup hidden">
+          <div class="setup-header">Watcher not running</div>
+          <p>To start interactive mode, run on server:</p>
+          <div class="code-block">
+            <code id="setup-commands">
+cd ~/projects/myproject
+# If using conda:
+conda activate myenv
+# Start watcher:
+tmux new -s plandrop
+.plandrop/watch.sh
+            </code>
+            <button id="copy-setup-btn" class="btn btn-tiny" title="Copy">Copy</button>
+          </div>
+          <p class="alt-text">Or quick start (no tmux):</p>
+          <div class="code-block">
+            <code>nohup .plandrop/watch.sh > .plandrop/watch.log 2>&1 &</code>
+            <button id="copy-quick-btn" class="btn btn-tiny" title="Copy">Copy</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer with input (Claude Code tab only) -->
+      <div id="cc-footer" class="footer">
+        <div class="session-info">
+          <span id="session-id-display" class="session-id">No session</span>
+          <button id="reset-session-btn" class="btn-link" title="Start fresh conversation">Reset</button>
+        </div>
+        <div class="input-area">
+          <textarea id="message-input" placeholder="Type a message..." rows="2"></textarea>
+          <div class="input-actions">
+            <button id="send-plan-btn" class="btn btn-primary" disabled>Send</button>
+            <button id="stop-btn" class="btn stop-btn hidden" title="Stop Claude">🛑 Stop</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================ -->
+  <!-- GEAR MENU OVERLAY -->
+  <!-- ============================================ -->
+  <div id="gear-menu-overlay" class="gear-menu-overlay hidden">
+    <div id="gear-menu-panel" class="gear-menu-panel">
+      <!-- Menu Header -->
+      <div class="gear-menu-header">
+        <button id="gear-menu-back" class="back-btn">&#8592;</button>
+        <span id="gear-menu-title">Settings</span>
+        <button id="gear-menu-close" class="icon-btn">&#10005;</button>
+      </div>
+
+      <!-- Main Menu -->
+      <div id="gear-menu-main" class="gear-menu-content">
+        <div class="gear-menu-item" data-action="history">
+          <span class="gear-menu-icon">&#128203;</span>
+          <span>Task History</span>
+        </div>
+        <div class="gear-menu-item" data-action="cost">
+          <span class="gear-menu-icon">&#128176;</span>
+          <span>Cost Summary</span>
+        </div>
+        <div class="gear-menu-item" data-action="export-history">
+          <span class="gear-menu-icon">&#128203;</span>
+          <span>Export History</span>
+          <span class="gear-menu-arrow">&#9654;</span>
+        </div>
+        <div class="gear-menu-divider"></div>
+        <div class="gear-menu-item" data-action="servers">
+          <span class="gear-menu-icon">&#128421;</span>
+          <span>Servers &amp; Projects</span>
+        </div>
+        <div class="gear-menu-item" data-action="profiles">
+          <span class="gear-menu-icon">&#128737;</span>
+          <span>Permission Profiles</span>
+        </div>
+        <div class="gear-menu-divider"></div>
+        <div class="gear-menu-item" data-action="export">
+          <span class="gear-menu-icon">&#128228;</span>
+          <span>Export Settings</span>
+        </div>
+        <div class="gear-menu-item" data-action="import">
+          <span class="gear-menu-icon">&#128229;</span>
+          <span>Import Settings</span>
+        </div>
+        <div class="gear-menu-divider"></div>
+        <div class="gear-menu-item" data-action="about">
+          <span class="gear-menu-icon">&#8505;</span>
+          <span>About PlanDrop</span>
+        </div>
+      </div>
+
+      <!-- Task History View -->
+      <div id="gear-menu-history" class="gear-menu-content hidden">
+        <div id="history-list" class="history-list">
+          <div class="empty-state">
+            <p>No task history yet.</p>
+            <p class="hint">Tasks will appear here after completion.</p>
+          </div>
+        </div>
+        <div class="gear-menu-footer">
+          <button id="export-history-btn" class="btn btn-secondary btn-small">Export as Markdown</button>
+          <button id="clear-history-btn" class="btn btn-tiny">Clear History</button>
+        </div>
+      </div>
+
+      <!-- Cost Summary View -->
+      <div id="gear-menu-cost" class="gear-menu-content hidden">
+        <div class="cost-summary">
+          <div class="cost-row">
+            <span class="cost-label">Today:</span>
+            <span id="cost-today" class="cost-value">-</span>
+          </div>
+          <div class="cost-row">
+            <span class="cost-label">This week:</span>
+            <span id="cost-week" class="cost-value">-</span>
+          </div>
+          <div class="cost-row">
+            <span class="cost-label">Total tasks:</span>
+            <span id="cost-tasks" class="cost-value">-</span>
+          </div>
+          <div class="cost-divider"></div>
+          <div class="cost-row">
+            <span class="cost-label">API source:</span>
+            <span id="cost-source" class="cost-value">-</span>
+          </div>
+          <div class="cost-row">
+            <span class="cost-label">Model:</span>
+            <span id="cost-model" class="cost-value">-</span>
+          </div>
+        </div>
+        <div class="cost-projects">
+          <div class="cost-section-title">Per-project breakdown:</div>
+          <div id="cost-project-list" class="cost-project-list">
+            <span class="hint">No data yet</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Export History View -->
+      <div id="gear-menu-export-history" class="gear-menu-content hidden">
+        <div class="export-history-options">
+          <p class="export-description">Export task history from the server as markdown.</p>
+          <button id="export-history-summary-btn" class="btn btn-secondary btn-block">
+            <span class="btn-icon">&#128196;</span>
+            Summary (concise)
+          </button>
+          <button id="export-history-full-btn" class="btn btn-secondary btn-block">
+            <span class="btn-icon">&#128209;</span>
+            Full Record (with file contents)
+          </button>
+        </div>
+        <div id="export-history-status" class="export-status hidden"></div>
+      </div>
+
+      <!-- About View -->
+      <div id="gear-menu-about" class="gear-menu-content hidden">
+        <div class="about-content">
+          <div class="about-title">PlanDrop</div>
+          <div class="about-tagline">Plan, review, execute — talks to Claude Code from browser</div>
+          <div class="about-version">Version 2.0.0</div>
+          <div class="about-links">
+            <a href="https://github.com/genecell/PlanDrop" target="_blank">GitHub</a>
+            <span class="about-sep">|</span>
+            <a href="https://github.com/genecell/PlanDrop/issues" target="_blank">Report Issue</a>
+          </div>
+          <div class="about-license">BSD-3-Clause License</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden file input for import -->
+  <input type="file" id="import-file-input" accept=".json" style="display: none;">
+
+  <script src="lib/marked.min.js"></script>
+  <script src="sidepanel.js"></script>
+</body>
+</html>

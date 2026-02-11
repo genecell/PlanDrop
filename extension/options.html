@@ -111,10 +111,103 @@
               <input type="text" id="project-path" placeholder="/home/user/projects/rnaseq">
               <span class="help-text">Absolute path on the remote server</span>
             </div>
+
+            <div class="form-divider">
+              <span>Interactive Mode Settings</span>
+            </div>
+
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="project-interactive">
+                <span>Enable interactive mode</span>
+              </label>
+              <span class="help-text">Use plan-review-execute workflow with Claude Code</span>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="project-profile">Permission Profile</label>
+                <select id="project-profile">
+                  <option value="plan_only">📋 Plan Only</option>
+                  <option value="edit_files">📝 Edit Files Only</option>
+                  <option value="standard">⚡ Standard</option>
+                  <option value="full_access">🔓 Full Access</option>
+                  <option value="custom">⚙️ Custom</option>
+                </select>
+              </div>
+              <div class="form-group flex-1">
+                <label for="project-model">Default Model</label>
+                <select id="project-model">
+                  <option value="opus">Opus (Quality)</option>
+                  <option value="sonnet">Sonnet (Speed)</option>
+                </select>
+              </div>
+            </div>
           </div>
           <div class="modal-footer">
             <button class="btn btn-secondary" data-close="project-modal">Cancel</button>
             <button id="save-project-btn" class="btn btn-primary">Save Project</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Custom Profiles Section -->
+      <section class="section">
+        <div class="section-header">
+          <h2>Custom Profiles</h2>
+          <button id="add-profile-btn" class="btn btn-secondary">+ New Profile</button>
+        </div>
+        <p class="section-description">Create custom permission profiles based on built-in templates.</p>
+        <div id="custom-profiles-list" class="list">
+          <div class="empty-state">No custom profiles. Use the built-in profiles or create your own.</div>
+        </div>
+      </section>
+
+      <!-- Custom Profile Modal -->
+      <div id="profile-modal" class="modal hidden">
+        <div class="modal-content modal-large">
+          <div class="modal-header">
+            <h3 id="profile-modal-title">New Custom Profile</h3>
+            <button class="close-btn" data-close="profile-modal">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-row">
+              <div class="form-group flex-2">
+                <label for="profile-name">Profile Name</label>
+                <input type="text" id="profile-name" placeholder="e.g., genomics-prod">
+              </div>
+              <div class="form-group flex-1">
+                <label for="profile-base">Base Profile</label>
+                <select id="profile-base">
+                  <option value="edit_files">Edit Files Only</option>
+                  <option value="standard">Standard</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Additional Allowed Commands</label>
+              <div id="profile-allow-list" class="tag-list"></div>
+              <div class="form-row">
+                <input type="text" id="profile-allow-input" placeholder="e.g., cellranger" class="flex-2">
+                <button id="add-allow-btn" class="btn btn-small btn-secondary">+ Add</button>
+              </div>
+              <span class="help-text">Command prefixes to allow (e.g., samtools, bedtools)</span>
+            </div>
+
+            <div class="form-group">
+              <label>Additional Blocked Commands</label>
+              <div id="profile-deny-list" class="tag-list"></div>
+              <div class="form-row">
+                <input type="text" id="profile-deny-input" placeholder="e.g., curl" class="flex-2">
+                <button id="add-deny-btn" class="btn btn-small btn-secondary">+ Add</button>
+              </div>
+              <span class="help-text">Command prefixes to block</span>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" data-close="profile-modal">Cancel</button>
+            <button id="save-profile-btn" class="btn btn-primary">Save Profile</button>
           </div>
         </div>
       </div>
@@ -157,7 +250,7 @@
     </main>
 
     <footer>
-      <p>PlanDrop v1.0.0</p>
+      <p>PlanDrop v2.0.0</p>
     </footer>
   </div>
 

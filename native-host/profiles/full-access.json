@@ -1,0 +1,6 @@
+{
+  "name": "full-access",
+  "description": "No permission checks at all. Use with caution.",
+  "permission_mode": "bypassPermissions",
+  "settings": null
+}

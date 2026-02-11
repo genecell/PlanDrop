@@ -1,0 +1,17 @@
+{
+  "name": "edit-only",
+  "description": "Claude can create and edit files. Cannot run any commands.",
+  "permission_mode": "acceptEdits",
+  "settings": {
+    "permissions": {
+      "allow": [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep"
+      ],
+      "deny": []
+    }
+  }
+}

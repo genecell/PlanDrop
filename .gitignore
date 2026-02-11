@@ -2,31 +2,53 @@
 .DS_Store
 Thumbs.db
 
-# Dev docs (keep private)
-docs/prompt/
-
-# Editor
+# IDE
+.vscode/
+.idea/
 *.swp
 *.swo
 *~
-.vscode/
-.idea/
+
+# Node
+node_modules/
+dist/
+.astro/
+package-lock.json
 
 # Python
 __pycache__/
 *.pyc
 *.pyo
-
-# Node (if any)
-node_modules/
+venv/
+.env
 
 # Extension packaging
-*.zip
 *.crx
 *.pem
-
-# Generated files
-extension/icons/generate_icons.py
+*.zip
 
 # Logs
 *.log
+
+# Claude Code (users generate their own)
+.claude/
+CLAUDE.md
+
+# PlanDrop runtime (generated on server)
+.plandrop/plans/
+.plandrop/responses/
+.plandrop/watcher.pid
+.plandrop/lock.json
+.plandrop/interrupt
+.plandrop/current_task.pid
+.plandrop/heartbeat
+.plandrop/session_id
+.plandrop/session_history.jsonl
+
+# Development files (keep in PlanDrop-dev only)
+docs/prompt/
+docs/report/
+scripts/
+extension/icons/generate_icons.py
+docs/brand/
+native-host/test_host.py

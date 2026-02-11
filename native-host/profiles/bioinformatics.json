@@ -1,0 +1,40 @@
+{
+  "name": "bioinformatics",
+  "description": "Genomics pipelines, RNA-seq, ChIP-seq, scRNA-seq, CUT&Run.",
+  "permission_mode": "acceptEdits",
+  "settings": {
+    "permissions": {
+      "allow": [
+        "Read", "Write", "Edit", "Glob", "Grep",
+        "Bash(python:*)", "Bash(python3:*)",
+        "Bash(Rscript:*)", "Bash(R:*)",
+        "Bash(snakemake:*)", "Bash(nextflow:*)",
+        "Bash(samtools:*)", "Bash(bedtools:*)", "Bash(bcftools:*)",
+        "Bash(bwa:*)", "Bash(bowtie2:*)",
+        "Bash(STAR:*)", "Bash(hisat2:*)",
+        "Bash(featureCounts:*)", "Bash(htseq-count:*)",
+        "Bash(fastqc:*)", "Bash(multiqc:*)",
+        "Bash(trimmomatic:*)", "Bash(cutadapt:*)", "Bash(fastp:*)",
+        "Bash(picard:*)", "Bash(gatk:*)",
+        "Bash(deeptools:*)", "Bash(macs2:*)", "Bash(macs3:*)",
+        "Bash(homer:*)",
+        "Bash(seurat:*)", "Bash(scanpy:*)", "Bash(cellranger:*)",
+        "Bash(conda:*)", "Bash(pip:*)", "Bash(pip3:*)", "Bash(mamba:*)",
+        "Bash(cat:*)", "Bash(head:*)", "Bash(tail:*)", "Bash(less:*)",
+        "Bash(wc:*)", "Bash(grep:*)", "Bash(awk:*)", "Bash(sed:*)",
+        "Bash(sort:*)", "Bash(cut:*)", "Bash(uniq:*)", "Bash(tr:*)",
+        "Bash(mkdir:*)", "Bash(cp:*)", "Bash(mv:*)", "Bash(ls:*)",
+        "Bash(find:*)", "Bash(du:*)", "Bash(df:*)",
+        "Bash(gzip:*)", "Bash(gunzip:*)", "Bash(zcat:*)", "Bash(bgzip:*)",
+        "Bash(tabix:*)", "Bash(wget:*)", "Bash(curl:*)",
+        "Bash(git:*)", "Bash(make:*)",
+        "Bash(pytest:*)", "Bash(bash:*)", "Bash(sh:*)"
+      ],
+      "deny": [
+        "Bash(sudo:*)",
+        "Bash(chmod 777:*)",
+        "Bash(rm -rf /*:*)"
+      ]
+    }
+  }
+}

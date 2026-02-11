@@ -60,6 +60,7 @@ async function init() {
   elements.toggleBtns = document.querySelectorAll('.toggle-btn');
   elements.clearBtn = document.getElementById('clear-btn');
   elements.pasteBtn = document.getElementById('paste-btn');
+  elements.interactiveBtn = document.getElementById('interactive-btn');
 
   // Load config
   await loadConfig();
@@ -167,6 +168,30 @@ function setupEventListeners() {
   // Paste from clipboard button
   if (elements.pasteBtn) {
     elements.pasteBtn.addEventListener('click', pasteFromClipboard);
+  }
+
+  // Interactive mode button
+  if (elements.interactiveBtn) {
+    elements.interactiveBtn.addEventListener('click', openInteractiveMode);
+  }
+}
+
+/**
+ * Open the side panel for interactive mode
+ */
+async function openInteractiveMode() {
+  try {
+    // Get current tab
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab) {
+      // Open side panel
+      await chrome.sidePanel.open({ tabId: tab.id });
+      // Close popup
+      window.close();
+    }
+  } catch (e) {
+    console.error('Failed to open side panel:', e);
+    setStatus('Error opening side panel', 'error');
   }
 }
 

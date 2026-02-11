@@ -9,12 +9,16 @@ let config = {
   defaultServerId: null,
   defaultFilename: 'plan.md',
   autoClipboard: true,
-  defaultViewMode: 'split'
+  defaultViewMode: 'split',
+  customProfiles: {}
 };
 
 let editingServerId = null;
 let editingProjectId = null;
 let editingServerIdForProject = null;
+let editingProfileId = null;
+let profileAllowList = [];
+let profileDenyList = [];
 
 // DOM Elements
 const elements = {};
@@ -47,7 +51,25 @@ async function init() {
   // Project form fields
   elements.projectName = document.getElementById('project-name');
   elements.projectPath = document.getElementById('project-path');
+  elements.projectInteractive = document.getElementById('project-interactive');
+  elements.projectProfile = document.getElementById('project-profile');
+  elements.projectModel = document.getElementById('project-model');
   elements.saveProjectBtn = document.getElementById('save-project-btn');
+
+  // Custom profiles
+  elements.customProfilesList = document.getElementById('custom-profiles-list');
+  elements.addProfileBtn = document.getElementById('add-profile-btn');
+  elements.profileModal = document.getElementById('profile-modal');
+  elements.profileModalTitle = document.getElementById('profile-modal-title');
+  elements.profileName = document.getElementById('profile-name');
+  elements.profileBase = document.getElementById('profile-base');
+  elements.profileAllowList = document.getElementById('profile-allow-list');
+  elements.profileAllowInput = document.getElementById('profile-allow-input');
+  elements.addAllowBtn = document.getElementById('add-allow-btn');
+  elements.profileDenyList = document.getElementById('profile-deny-list');
+  elements.profileDenyInput = document.getElementById('profile-deny-input');
+  elements.addDenyBtn = document.getElementById('add-deny-btn');
+  elements.saveProfileBtn = document.getElementById('save-profile-btn');
 
   // General settings
   elements.defaultFilename = document.getElementById('default-filename');
@@ -65,8 +87,9 @@ async function init() {
   // Setup event listeners
   setupEventListeners();
 
-  // Render servers
+  // Render lists
   renderServersList();
+  renderCustomProfilesList();
 }
 
 /**
@@ -74,19 +97,23 @@ async function init() {
  */
 async function loadConfig() {
   return new Promise((resolve) => {
-    chrome.storage.sync.get(['servers', 'defaultServerId', 'defaultFilename', 'autoClipboard', 'defaultViewMode'], (data) => {
-      config.servers = data.servers || [];
-      config.defaultServerId = data.defaultServerId || null;
-      config.defaultFilename = data.defaultFilename || 'plan.md';
-      config.autoClipboard = data.autoClipboard !== false;
-      config.defaultViewMode = data.defaultViewMode || 'split';
+    chrome.storage.sync.get(['servers', 'defaultServerId', 'defaultFilename', 'autoClipboard', 'defaultViewMode'], (syncData) => {
+      config.servers = syncData.servers || [];
+      config.defaultServerId = syncData.defaultServerId || null;
+      config.defaultFilename = syncData.defaultFilename || 'plan.md';
+      config.autoClipboard = syncData.autoClipboard !== false;
+      config.defaultViewMode = syncData.defaultViewMode || 'split';
 
       // Update UI
       elements.defaultFilename.value = config.defaultFilename;
       elements.autoClipboard.checked = config.autoClipboard;
       elements.defaultView.value = config.defaultViewMode;
 
-      resolve();
+      // Load custom profiles from local storage (can be larger)
+      chrome.storage.local.get(['customProfiles'], (localData) => {
+        config.customProfiles = localData.customProfiles || {};
+        resolve();
+      });
     });
   });
 }
@@ -193,6 +220,44 @@ function setupEventListeners() {
   elements.exportBtn.addEventListener('click', exportSettings);
   elements.importBtn.addEventListener('click', () => elements.importFile.click());
   elements.importFile.addEventListener('change', importSettings);
+
+  // Custom profiles
+  elements.addProfileBtn.addEventListener('click', () => openProfileModal());
+  elements.addAllowBtn.addEventListener('click', addAllowTag);
+  elements.addDenyBtn.addEventListener('click', addDenyTag);
+  elements.saveProfileBtn.addEventListener('click', saveProfile);
+
+  // Allow enter key for adding tags
+  elements.profileAllowInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addAllowTag();
+    }
+  });
+  elements.profileDenyInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addDenyTag();
+    }
+  });
+
+  // Event delegation for custom profiles list
+  elements.customProfilesList.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+
+    const action = btn.dataset.action;
+    const profileId = btn.dataset.profileId;
+
+    switch (action) {
+      case 'edit-profile':
+        openProfileModal(profileId);
+        break;
+      case 'delete-profile':
+        deleteProfile(profileId);
+        break;
+    }
+  });
 }
 
 /**
@@ -228,6 +293,10 @@ function renderServersList() {
             <div class="project-item">
               <span class="project-name">${escapeHtml(project.name)}${project.id === server.defaultProjectId ? ' <span class="default-badge">★</span>' : ''}</span>
               <span class="project-path">${escapeHtml(project.path)}</span>
+              <div class="project-settings">
+                ${project.interactive ? '<span class="project-badge interactive">Interactive</span>' : ''}
+                ${project.profile ? `<span class="project-badge">${escapeHtml(project.profile)}</span>` : ''}
+              </div>
               <div class="project-actions">
                 <button class="btn btn-tiny" data-action="set-default-project" data-server-id="${server.id}" data-project-id="${project.id}">Default</button>
                 <button class="btn btn-tiny" data-action="edit-project" data-server-id="${server.id}" data-project-id="${project.id}">Edit</button>
@@ -382,8 +451,15 @@ function openProjectModal(serverId, projectId = null) {
   editingServerIdForProject = serverId;
   editingProjectId = projectId;
 
+  // Reset form
   elements.projectName.value = '';
   elements.projectPath.value = '';
+  elements.projectInteractive.checked = false;
+  elements.projectProfile.value = 'standard';
+  elements.projectModel.value = 'opus';
+
+  // Populate custom profiles in dropdown
+  updateProfileDropdown();
 
   if (projectId) {
     const server = config.servers.find(s => s.id === serverId);
@@ -392,12 +468,35 @@ function openProjectModal(serverId, projectId = null) {
       elements.projectModalTitle.textContent = 'Edit Project';
       elements.projectName.value = project.name;
       elements.projectPath.value = project.path;
+      elements.projectInteractive.checked = project.interactive || false;
+      // Handle legacy profile names
+      const profileValue = project.profile || 'standard';
+      elements.projectProfile.value = profileValue;
+      elements.projectModel.value = project.model || 'opus';
     }
   } else {
     elements.projectModalTitle.textContent = 'Add Project';
   }
 
   elements.projectModal.classList.remove('hidden');
+}
+
+/**
+ * Update profile dropdown with custom profiles
+ */
+function updateProfileDropdown() {
+  // Remove existing custom profile options
+  const existingCustom = elements.projectProfile.querySelectorAll('option[data-custom]');
+  existingCustom.forEach(opt => opt.remove());
+
+  // Add custom profiles after built-in options
+  for (const [id, profile] of Object.entries(config.customProfiles)) {
+    const option = document.createElement('option');
+    option.value = id;
+    option.textContent = profile.name + ' (Custom)';
+    option.dataset.custom = 'true';
+    elements.projectProfile.appendChild(option);
+  }
 }
 
 /**
@@ -417,7 +516,13 @@ async function saveProject() {
 
   if (!server.projects) server.projects = [];
 
-  const projectData = { name, path };
+  const projectData = {
+    name,
+    path,
+    interactive: elements.projectInteractive.checked,
+    profile: elements.projectProfile.value,
+    model: elements.projectModel.value
+  };
 
   if (editingProjectId) {
     const index = server.projects.findIndex(p => p.id === editingProjectId);
@@ -607,6 +712,168 @@ function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
+}
+
+// ============================================
+// Custom Profiles
+// ============================================
+
+/**
+ * Render custom profiles list
+ */
+function renderCustomProfilesList() {
+  const profiles = Object.entries(config.customProfiles);
+
+  if (profiles.length === 0) {
+    elements.customProfilesList.innerHTML = '<div class="empty-state">No custom profiles. Use the built-in profiles or create your own.</div>';
+    return;
+  }
+
+  elements.customProfilesList.innerHTML = profiles.map(([id, profile]) => `
+    <div class="profile-item" data-profile-id="${id}">
+      <div class="profile-info">
+        <span class="profile-name">${escapeHtml(profile.name)}</span>
+        <span class="profile-meta">Based on: ${escapeHtml(profile.base)} | +${profile.additionalAllow?.length || 0} allowed, +${profile.additionalDeny?.length || 0} blocked</span>
+      </div>
+      <div class="profile-actions">
+        <button class="btn btn-small btn-secondary" data-action="edit-profile" data-profile-id="${id}">Edit</button>
+        <button class="btn btn-small btn-danger" data-action="delete-profile" data-profile-id="${id}">Delete</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+/**
+ * Open profile modal
+ */
+function openProfileModal(profileId = null) {
+  editingProfileId = profileId;
+  profileAllowList = [];
+  profileDenyList = [];
+
+  // Reset form
+  elements.profileName.value = '';
+  elements.profileBase.value = 'standard';
+  elements.profileAllowInput.value = '';
+  elements.profileDenyInput.value = '';
+
+  if (profileId && config.customProfiles[profileId]) {
+    const profile = config.customProfiles[profileId];
+    elements.profileModalTitle.textContent = 'Edit Custom Profile';
+    elements.profileName.value = profile.name;
+    elements.profileBase.value = profile.base;
+    profileAllowList = [...(profile.additionalAllow || [])];
+    profileDenyList = [...(profile.additionalDeny || [])];
+  } else {
+    elements.profileModalTitle.textContent = 'New Custom Profile';
+  }
+
+  renderTagLists();
+  elements.profileModal.classList.remove('hidden');
+}
+
+/**
+ * Render tag lists for allow/deny
+ */
+function renderTagLists() {
+  elements.profileAllowList.innerHTML = profileAllowList.map(cmd => `
+    <span class="tag">
+      ${escapeHtml(cmd)}
+      <button class="tag-remove" data-cmd="${escapeHtml(cmd)}" data-list="allow">&times;</button>
+    </span>
+  `).join('');
+
+  elements.profileDenyList.innerHTML = profileDenyList.map(cmd => `
+    <span class="tag deny">
+      ${escapeHtml(cmd)}
+      <button class="tag-remove" data-cmd="${escapeHtml(cmd)}" data-list="deny">&times;</button>
+    </span>
+  `).join('');
+
+  // Add remove handlers
+  elements.profileAllowList.querySelectorAll('.tag-remove').forEach(btn => {
+    btn.addEventListener('click', () => {
+      profileAllowList = profileAllowList.filter(c => c !== btn.dataset.cmd);
+      renderTagLists();
+    });
+  });
+
+  elements.profileDenyList.querySelectorAll('.tag-remove').forEach(btn => {
+    btn.addEventListener('click', () => {
+      profileDenyList = profileDenyList.filter(c => c !== btn.dataset.cmd);
+      renderTagLists();
+    });
+  });
+}
+
+/**
+ * Add command to allow list
+ */
+function addAllowTag() {
+  const cmd = elements.profileAllowInput.value.trim();
+  if (cmd && !profileAllowList.includes(cmd)) {
+    profileAllowList.push(cmd);
+    elements.profileAllowInput.value = '';
+    renderTagLists();
+  }
+}
+
+/**
+ * Add command to deny list
+ */
+function addDenyTag() {
+  const cmd = elements.profileDenyInput.value.trim();
+  if (cmd && !profileDenyList.includes(cmd)) {
+    profileDenyList.push(cmd);
+    elements.profileDenyInput.value = '';
+    renderTagLists();
+  }
+}
+
+/**
+ * Save custom profile
+ */
+async function saveProfile() {
+  const name = elements.profileName.value.trim();
+  const base = elements.profileBase.value;
+
+  if (!name) {
+    alert('Please enter a profile name');
+    return;
+  }
+
+  const profileId = editingProfileId || generateId();
+  const profileData = {
+    name,
+    base,
+    additionalAllow: profileAllowList.map(cmd => `Bash(${cmd}:*)`),
+    additionalDeny: profileDenyList.map(cmd => `Bash(${cmd}:*)`)
+  };
+
+  config.customProfiles[profileId] = profileData;
+
+  // Save to local storage
+  await new Promise(resolve => {
+    chrome.storage.local.set({ customProfiles: config.customProfiles }, resolve);
+  });
+
+  renderCustomProfilesList();
+  elements.profileModal.classList.add('hidden');
+}
+
+/**
+ * Delete custom profile
+ */
+async function deleteProfile(profileId) {
+  if (!confirm('Delete this custom profile?')) return;
+
+  delete config.customProfiles[profileId];
+
+  await new Promise(resolve => {
+    chrome.storage.local.set({ customProfiles: config.customProfiles }, resolve);
+  });
+
+  renderCustomProfilesList();
 }
 
 // Initialize on load

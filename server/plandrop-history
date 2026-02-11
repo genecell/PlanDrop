@@ -1,0 +1,665 @@
+#!/usr/bin/env python3
+"""
+plandrop-history - Parse PlanDrop plan + response files into readable reports.
+
+Usage:
+    plandrop-history                        # concise, current session, markdown to stdout
+    plandrop-history --full                 # full, current session
+    plandrop-history --all                  # concise, all sessions
+    plandrop-history --all --full           # full, all sessions
+    plandrop-history --json                 # machine-readable JSON (always full data)
+    plandrop-history --since 2025-02-10     # filter by date
+    plandrop-history --task plan_17707...   # single task detail
+    plandrop-history --output-dir ./history # full mode: one file per task
+    plandrop-history --help                 # usage info
+"""
+
+import argparse
+import json
+import os
+import sys
+from datetime import datetime
+from pathlib import Path
+
+
+def find_plandrop_dir():
+    """Find .plandrop directory in current or parent directories."""
+    cwd = Path.cwd()
+    for parent in [cwd] + list(cwd.parents):
+        plandrop = parent / '.plandrop'
+        if plandrop.is_dir():
+            return plandrop, parent
+    return None, None
+
+
+def parse_plan_json(filepath):
+    """Parse a plan JSON file."""
+    try:
+        with open(filepath) as f:
+            data = json.load(f)
+        return {
+            'id': data.get('id', ''),
+            'type': data.get('type', 'plan'),
+            'action': data.get('action', 'plan'),
+            'content': data.get('content', ''),
+            'permission_mode': data.get('permission_mode', ''),
+            'model': data.get('model', ''),
+            'timestamp': data.get('timestamp', ''),
+        }
+    except (json.JSONDecodeError, IOError) as e:
+        return None
+
+
+def parse_response_jsonl(filepath):
+    """Parse a Claude Code stream-json JSONL file into structured data."""
+    claude_text = []
+    files_modified = []
+    commands_run = []
+    tool_outputs = {}  # tool_use_id -> output
+    cost = None
+    duration = None
+    status = None
+    model = None
+    api_source = None
+    session_id = None
+    permission_denials = []
+
+    try:
+        with open(filepath) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+
+                etype = event.get('type', '')
+
+                # System init
+                if etype == 'system' and event.get('subtype') == 'init':
+                    model = event.get('model', '')
+                    api_source = event.get('apiKeySource', '')
+                    session_id = event.get('session_id', '')
+
+                # Assistant messages (Claude's text + tool calls)
+                elif etype == 'assistant':
+                    message = event.get('message', {})
+                    for block in message.get('content', []):
+                        if not block:
+                            continue
+                        block_type = block.get('type', '')
+
+                        if block_type == 'text':
+                            text = block.get('text', '')
+                            if text:
+                                claude_text.append(text)
+
+                        elif block_type == 'tool_use':
+                            tool_name = block.get('name', '')
+                            tool_input = block.get('input', {})
+                            tool_id = block.get('id', '')
+
+                            # Skip internal .claude/ paths
+                            file_path = tool_input.get('file_path', '') or tool_input.get('path', '')
+                            if '/.claude/' in file_path:
+                                continue
+
+                            if tool_name in ('Write', 'Edit'):
+                                files_modified.append({
+                                    'tool_id': tool_id,
+                                    'action': tool_name,
+                                    'path': file_path,
+                                    'content': tool_input.get('content', '') or tool_input.get('new_string', ''),
+                                })
+                            elif tool_name == 'Bash':
+                                commands_run.append({
+                                    'tool_id': tool_id,
+                                    'command': tool_input.get('command', ''),
+                                    'description': tool_input.get('description', ''),
+                                })
+
+                # Tool results (command output, file read results)
+                elif etype == 'user':
+                    message = event.get('message', {})
+                    for block in message.get('content', []):
+                        if not block:
+                            continue
+                        if block.get('type') == 'tool_result':
+                            tool_id = block.get('tool_use_id', '')
+                            content = block.get('content', '')
+                            is_error = block.get('is_error', False)
+
+                            # Also check tool_use_result for structured output
+                            tool_result = event.get('tool_use_result', {})
+                            if isinstance(tool_result, dict):
+                                stdout = tool_result.get('stdout', '')
+                                stderr = tool_result.get('stderr', '')
+                                if stdout or stderr:
+                                    content = stdout + ('\n' + stderr if stderr else '')
+                            elif isinstance(tool_result, str):
+                                content = tool_result
+
+                            tool_outputs[tool_id] = {
+                                'content': content,
+                                'is_error': is_error
+                            }
+
+                # Result (final stats)
+                elif etype == 'result':
+                    cost = event.get('total_cost_usd')
+                    duration = event.get('duration_ms')
+                    status = event.get('subtype', 'unknown')
+                    if event.get('session_id'):
+                        session_id = event.get('session_id')
+                    permission_denials = event.get('permission_denials', [])
+
+    except IOError:
+        pass
+
+    # Match tool outputs to commands
+    for cmd in commands_run:
+        if cmd['tool_id'] in tool_outputs:
+            cmd['output'] = tool_outputs[cmd['tool_id']]['content']
+            cmd['is_error'] = tool_outputs[cmd['tool_id']]['is_error']
+
+    return {
+        'claude_text': '\n\n'.join(claude_text),
+        'files_modified': files_modified,
+        'commands_run': commands_run,
+        'cost_usd': cost,
+        'duration_ms': duration,
+        'status': status,
+        'model': model,
+        'api_source': api_source,
+        'session_id': session_id,
+        'permission_denials': permission_denials,
+    }
+
+
+def find_all_tasks(plandrop_dir):
+    """Find all plan/exec files and their matching responses."""
+    tasks = []
+
+    # Look in both plans/ (pending) and completed/ (processed)
+    plan_dirs = [
+        plandrop_dir / 'plans',
+        plandrop_dir / 'completed',
+    ]
+
+    response_dir = plandrop_dir / 'responses'
+
+    seen_ids = set()
+
+    for plan_dir in plan_dirs:
+        if not plan_dir.is_dir():
+            continue
+
+        for plan_file in plan_dir.glob('*.json'):
+            plan_id = plan_file.stem
+            if plan_id in seen_ids:
+                continue
+            seen_ids.add(plan_id)
+
+            # Parse plan
+            plan_data = parse_plan_json(plan_file)
+            if not plan_data:
+                continue
+
+            # Find matching response
+            response_file = response_dir / f'{plan_id}.jsonl'
+            response_data = None
+            if response_file.exists():
+                response_data = parse_response_jsonl(response_file)
+
+            tasks.append({
+                'plan_id': plan_id,
+                'plan_file': str(plan_file),
+                'response_file': str(response_file) if response_file.exists() else None,
+                'plan': plan_data,
+                'response': response_data,
+            })
+
+    # Sort by timestamp
+    def get_timestamp(task):
+        ts = task['plan'].get('timestamp', '')
+        if ts:
+            try:
+                return datetime.fromisoformat(ts.replace('Z', '+00:00'))
+            except ValueError:
+                pass
+        # Fallback: extract from plan_id (e.g., plan_1770764821038)
+        try:
+            parts = task['plan_id'].split('_')
+            if len(parts) >= 2:
+                return datetime.fromtimestamp(int(parts[1]) / 1000)
+        except (ValueError, IndexError):
+            pass
+        return datetime.min
+
+    tasks.sort(key=get_timestamp)
+    return tasks
+
+
+def group_by_session(tasks):
+    """Group tasks by session_id."""
+    sessions = {}
+    no_session = []
+
+    for task in tasks:
+        session_id = None
+        if task.get('response') and task['response'].get('session_id'):
+            session_id = task['response']['session_id']
+
+        if session_id:
+            if session_id not in sessions:
+                sessions[session_id] = []
+            sessions[session_id].append(task)
+        else:
+            no_session.append(task)
+
+    return sessions, no_session
+
+
+def format_duration(ms):
+    """Format milliseconds as human-readable duration."""
+    if ms is None:
+        return '?'
+    seconds = ms / 1000
+    if seconds < 60:
+        return f'{seconds:.1f}s'
+    minutes = seconds / 60
+    if minutes < 60:
+        return f'{minutes:.1f} min'
+    hours = minutes / 60
+    return f'{hours:.1f} hr'
+
+
+def format_cost(cost_usd, api_source):
+    """Format cost display."""
+    if api_source in ('none', 'oauth', None, ''):
+        return 'Free (Max)'
+    if cost_usd is None:
+        return '?'
+    return f'${cost_usd:.4f}'
+
+
+def format_timestamp(ts_str):
+    """Format ISO timestamp as readable time."""
+    if not ts_str:
+        return '?'
+    try:
+        dt = datetime.fromisoformat(ts_str.replace('Z', '+00:00'))
+        return dt.strftime('%I:%M:%S %p')
+    except ValueError:
+        return ts_str
+
+
+def format_date(ts_str):
+    """Format ISO timestamp as date."""
+    if not ts_str:
+        return '?'
+    try:
+        dt = datetime.fromisoformat(ts_str.replace('Z', '+00:00'))
+        return dt.strftime('%Y-%m-%d')
+    except ValueError:
+        return ts_str
+
+
+def get_file_extension(path):
+    """Get file extension for code block language."""
+    ext_map = {
+        '.py': 'python',
+        '.js': 'javascript',
+        '.ts': 'typescript',
+        '.sh': 'bash',
+        '.bash': 'bash',
+        '.r': 'r',
+        '.R': 'r',
+        '.md': 'markdown',
+        '.json': 'json',
+        '.yaml': 'yaml',
+        '.yml': 'yaml',
+        '.html': 'html',
+        '.css': 'css',
+        '.sql': 'sql',
+    }
+    _, ext = os.path.splitext(path)
+    return ext_map.get(ext, '')
+
+
+def render_task_concise(task, task_num):
+    """Render a single task in concise format."""
+    plan = task['plan']
+    response = task.get('response') or {}
+
+    timestamp = format_timestamp(plan.get('timestamp', ''))
+    plan_id = task['plan_id']
+
+    lines = []
+    lines.append(f"## Task {task_num} — {timestamp} ({plan_id})")
+    lines.append('')
+
+    # Request
+    lines.append('**Request:**')
+    lines.append(plan.get('content', '(no content)'))
+    lines.append('')
+
+    # Claude's response (truncated)
+    claude_text = response.get('claude_text', '')
+    if claude_text:
+        label = "**Claude's Plan:**" if plan.get('action') == 'plan' else "**Claude's Response:**"
+        lines.append(label)
+        if len(claude_text) > 500:
+            lines.append(claude_text[:500] + '...')
+        else:
+            lines.append(claude_text)
+        lines.append('')
+
+    # Files modified (just names)
+    files = response.get('files_modified', [])
+    if files:
+        filenames = [os.path.basename(f['path']) for f in files if f.get('path')]
+        lines.append(f"**Files Modified:** {', '.join(filenames)}")
+
+    # Commands run (just command strings)
+    commands = response.get('commands_run', [])
+    if commands:
+        cmd_strs = [c['command'][:60] + ('...' if len(c['command']) > 60 else '')
+                    for c in commands if c.get('command')]
+        if cmd_strs:
+            lines.append(f"**Commands Run:** {'; '.join(cmd_strs)}")
+
+    # Stats
+    cost = format_cost(response.get('cost_usd'), response.get('api_source'))
+    duration = format_duration(response.get('duration_ms'))
+    status = response.get('status') or 'unknown'
+    status_emoji = '✅' if status == 'success' else '❌' if status == 'error' else '❓'
+
+    lines.append(f"**Cost:** {cost} | **Duration:** {duration} | **Status:** {status_emoji} {status.title()}")
+    lines.append('')
+    lines.append('---')
+    lines.append('')
+
+    return '\n'.join(lines)
+
+
+def render_task_full(task, task_num):
+    """Render a single task in full format."""
+    plan = task['plan']
+    response = task.get('response') or {}
+
+    timestamp = format_timestamp(plan.get('timestamp', ''))
+    plan_id = task['plan_id']
+
+    lines = []
+    lines.append(f"## Task {task_num} — {timestamp} ({plan_id})")
+    lines.append('')
+
+    # Request (full)
+    lines.append('**Request:**')
+    lines.append(plan.get('content', '(no content)'))
+    lines.append('')
+
+    # Claude's response (full)
+    claude_text = response.get('claude_text', '')
+    if claude_text:
+        label = "**Claude's Full Response:**"
+        lines.append(label)
+        lines.append(claude_text)
+        lines.append('')
+
+    # Files written (with content)
+    files = response.get('files_modified', [])
+    if files:
+        lines.append('**Files Written:**')
+        lines.append('')
+        for f in files:
+            path = f.get('path', 'unknown')
+            content = f.get('content', '')
+            action = f.get('action', 'Write')
+            filename = os.path.basename(path)
+            lang = get_file_extension(path)
+
+            lines.append(f"### {filename}")
+            lines.append(f"*{action}: {path}*")
+            lines.append(f'```{lang}')
+            lines.append(content)
+            lines.append('```')
+            lines.append('')
+
+    # Commands executed (with output)
+    commands = response.get('commands_run', [])
+    if commands:
+        lines.append('**Commands Executed:**')
+        lines.append('')
+        for c in commands:
+            cmd = c.get('command', '')
+            output = c.get('output', '')
+            is_error = c.get('is_error', False)
+
+            lines.append(f"### `{cmd[:80]}{'...' if len(cmd) > 80 else ''}`")
+            if output:
+                lines.append('```')
+                lines.append(output[:2000] + ('...' if len(output) > 2000 else ''))
+                lines.append('```')
+            if is_error:
+                lines.append('*(exited with error)*')
+            lines.append('')
+
+    # Permission denials
+    denials = response.get('permission_denials', [])
+    if denials:
+        lines.append('**Blocked Commands:**')
+        for d in denials:
+            tool = d.get('tool_name', '?')
+            lines.append(f"- {tool}")
+        lines.append('')
+
+    # Stats
+    cost = format_cost(response.get('cost_usd'), response.get('api_source'))
+    duration = format_duration(response.get('duration_ms'))
+    status = response.get('status') or 'unknown'
+    status_emoji = '✅' if status == 'success' else '❌' if status == 'error' else '❓'
+
+    lines.append(f"**Cost:** {cost} | **Duration:** {duration} | **Status:** {status_emoji} {status.title()}")
+    lines.append('')
+    lines.append('---')
+    lines.append('')
+
+    return '\n'.join(lines)
+
+
+def render_session_header(session_id, tasks, project_path):
+    """Render session header."""
+    lines = []
+    lines.append('# PlanDrop Session History')
+    lines.append(f'**Session:** {session_id or "Unknown"}')
+    lines.append(f'**Project:** {project_path}')
+
+    # Get date from first task
+    if tasks:
+        date = format_date(tasks[0]['plan'].get('timestamp', ''))
+        lines.append(f'**Date:** {date}')
+
+    # Calculate totals
+    total_cost = 0
+    total_duration = 0
+    api_source = None
+    for t in tasks:
+        r = t.get('response') or {}
+        if r.get('cost_usd'):
+            total_cost += r['cost_usd']
+        if r.get('duration_ms'):
+            total_duration += r['duration_ms']
+        if r.get('api_source'):
+            api_source = r['api_source']
+
+    cost_str = format_cost(total_cost if total_cost else None, api_source)
+    duration_str = format_duration(total_duration if total_duration else None)
+
+    lines.append(f'**Tasks:** {len(tasks)} | **Total Cost:** {cost_str} | **Total Duration:** {duration_str}')
+    lines.append('')
+    lines.append('---')
+    lines.append('')
+
+    return '\n'.join(lines)
+
+
+def filter_by_date(tasks, since_date):
+    """Filter tasks by date."""
+    try:
+        since = datetime.strptime(since_date, '%Y-%m-%d')
+    except ValueError:
+        print(f"Invalid date format: {since_date}. Use YYYY-MM-DD.", file=sys.stderr)
+        return tasks
+
+    filtered = []
+    for task in tasks:
+        ts = task['plan'].get('timestamp', '')
+        if ts:
+            try:
+                task_dt = datetime.fromisoformat(ts.replace('Z', '+00:00')).replace(tzinfo=None)
+                if task_dt.date() >= since.date():
+                    filtered.append(task)
+            except ValueError:
+                filtered.append(task)  # Include if can't parse
+        else:
+            filtered.append(task)
+    return filtered
+
+
+def get_current_session_id(plandrop_dir):
+    """Get current session_id from file."""
+    session_file = plandrop_dir / 'session_id'
+    if session_file.exists():
+        try:
+            return session_file.read_text().strip()
+        except IOError:
+            pass
+    return None
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description='Parse PlanDrop plan + response files into readable reports.',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=__doc__
+    )
+    parser.add_argument('--full', action='store_true',
+                        help='Full output with file contents and command outputs')
+    parser.add_argument('--all', action='store_true',
+                        help='Show all sessions, not just current')
+    parser.add_argument('--json', action='store_true',
+                        help='Output as JSON (always includes full data)')
+    parser.add_argument('--since', metavar='DATE',
+                        help='Filter tasks since date (YYYY-MM-DD)')
+    parser.add_argument('--task', metavar='PLAN_ID',
+                        help='Show single task detail')
+    parser.add_argument('--output-dir', metavar='DIR',
+                        help='Write each task to separate file in DIR')
+
+    args = parser.parse_args()
+
+    # Find .plandrop directory
+    plandrop_dir, project_path = find_plandrop_dir()
+    if not plandrop_dir:
+        print("Error: No .plandrop directory found in current or parent directories.", file=sys.stderr)
+        print("Run this from a project directory with PlanDrop initialized.", file=sys.stderr)
+        sys.exit(1)
+
+    # Find all tasks
+    all_tasks = find_all_tasks(plandrop_dir)
+
+    if not all_tasks:
+        print("No tasks found.", file=sys.stderr)
+        sys.exit(0)
+
+    # Filter by date if specified
+    if args.since:
+        all_tasks = filter_by_date(all_tasks, args.since)
+
+    # Single task mode
+    if args.task:
+        matching = [t for t in all_tasks if t['plan_id'] == args.task]
+        if not matching:
+            print(f"Task not found: {args.task}", file=sys.stderr)
+            sys.exit(1)
+        task = matching[0]
+        if args.json:
+            print(json.dumps(task, indent=2, default=str))
+        else:
+            print(render_task_full(task, 1))
+        sys.exit(0)
+
+    # Group by session
+    sessions, no_session = group_by_session(all_tasks)
+
+    # Filter to current session unless --all
+    if not args.all:
+        current_session = get_current_session_id(plandrop_dir)
+        if current_session and current_session in sessions:
+            sessions = {current_session: sessions[current_session]}
+            no_session = []
+        elif sessions:
+            # Use most recent session
+            last_session = list(sessions.keys())[-1]
+            sessions = {last_session: sessions[last_session]}
+            no_session = []
+
+    # JSON output
+    if args.json:
+        output = {
+            'project': str(project_path),
+            'sessions': []
+        }
+        for session_id, tasks in sessions.items():
+            session_data = {
+                'session_id': session_id,
+                'tasks': tasks
+            }
+            output['sessions'].append(session_data)
+        if no_session:
+            output['sessions'].append({
+                'session_id': None,
+                'tasks': no_session
+            })
+        print(json.dumps(output, indent=2, default=str))
+        sys.exit(0)
+
+    # Markdown output
+    render_func = render_task_full if args.full else render_task_concise
+
+    # Output to directory
+    if args.output_dir:
+        os.makedirs(args.output_dir, exist_ok=True)
+        task_num = 0
+        for session_id, tasks in sessions.items():
+            for task in tasks:
+                task_num += 1
+                date = format_date(task['plan'].get('timestamp', ''))
+                filename = f"{date}_task{task_num:02d}_{task['plan_id']}.md"
+                filepath = os.path.join(args.output_dir, filename)
+                with open(filepath, 'w') as f:
+                    f.write(render_task_full(task, task_num))
+                print(f"Wrote: {filepath}")
+        sys.exit(0)
+
+    # Output to stdout
+    output_parts = []
+    for session_id, tasks in sessions.items():
+        output_parts.append(render_session_header(session_id, tasks, project_path))
+        for i, task in enumerate(tasks, 1):
+            output_parts.append(render_func(task, i))
+
+    if no_session:
+        output_parts.append(render_session_header(None, no_session, project_path))
+        for i, task in enumerate(no_session, 1):
+            output_parts.append(render_func(task, i))
+
+    print(''.join(output_parts))
+
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,32 @@
+{
+  "name": "ml-deeplearning",
+  "description": "Training models, experiment tracking, GPU workflows.",
+  "permission_mode": "acceptEdits",
+  "settings": {
+    "permissions": {
+      "allow": [
+        "Read", "Write", "Edit", "Glob", "Grep",
+        "Bash(python:*)", "Bash(python3:*)",
+        "Bash(pip:*)", "Bash(pip3:*)", "Bash(conda:*)", "Bash(mamba:*)",
+        "Bash(nvidia-smi:*)", "Bash(gpustat:*)",
+        "Bash(torchrun:*)", "Bash(accelerate:*)",
+        "Bash(pytest:*)", "Bash(python -m pytest:*)",
+        "Bash(jupyter:*)", "Bash(tensorboard:*)",
+        "Bash(wandb:*)", "Bash(mlflow:*)",
+        "Bash(docker:*)", "Bash(singularity:*)",
+        "Bash(cat:*)", "Bash(head:*)", "Bash(tail:*)",
+        "Bash(wc:*)", "Bash(grep:*)", "Bash(awk:*)", "Bash(sed:*)",
+        "Bash(sort:*)", "Bash(cut:*)",
+        "Bash(mkdir:*)", "Bash(cp:*)", "Bash(mv:*)", "Bash(ls:*)",
+        "Bash(find:*)", "Bash(du:*)", "Bash(df:*)",
+        "Bash(git:*)", "Bash(make:*)", "Bash(cmake:*)",
+        "Bash(wget:*)", "Bash(curl:*)",
+        "Bash(bash:*)", "Bash(sh:*)"
+      ],
+      "deny": [
+        "Bash(sudo:*)",
+        "Bash(rm -rf /*:*)"
+      ]
+    }
+  }
+}
