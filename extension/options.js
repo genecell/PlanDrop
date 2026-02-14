@@ -3,6 +3,61 @@
  * Handles server/project configuration
  */
 
+// ============================================
+// Theme Management
+// ============================================
+
+/**
+ * Initialize theme on load
+ */
+function initTheme() {
+  chrome.storage.local.get('theme', (result) => {
+    const mode = result.theme || 'auto';
+    applyTheme(mode);
+    const themeSelect = document.getElementById('theme-select');
+    if (themeSelect) {
+      themeSelect.value = mode;
+    }
+  });
+
+  // Listen for OS theme changes (for auto mode)
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+    chrome.storage.local.get('theme', (result) => {
+      const mode = result.theme || 'auto';
+      if (mode === 'auto') {
+        applyTheme('auto');
+      }
+    });
+  });
+
+  // Listen for theme changes from other extension surfaces
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName === 'local' && changes.theme) {
+      const newTheme = changes.theme.newValue || 'auto';
+      applyTheme(newTheme);
+      const themeSelect = document.getElementById('theme-select');
+      if (themeSelect) {
+        themeSelect.value = newTheme;
+      }
+    }
+  });
+}
+
+/**
+ * Apply theme to document
+ */
+function applyTheme(mode) {
+  let effectiveTheme;
+
+  if (mode === 'auto') {
+    effectiveTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  } else {
+    effectiveTheme = mode;
+  }
+
+  document.documentElement.setAttribute('data-theme', effectiveTheme);
+}
+
 // State
 let config = {
   servers: [],
@@ -72,6 +127,7 @@ async function init() {
   elements.saveProfileBtn = document.getElementById('save-profile-btn');
 
   // General settings
+  elements.themeSelect = document.getElementById('theme-select');
   elements.defaultFilename = document.getElementById('default-filename');
   elements.autoClipboard = document.getElementById('auto-clipboard');
   elements.defaultView = document.getElementById('default-view');
@@ -86,6 +142,9 @@ async function init() {
 
   // Setup event listeners
   setupEventListeners();
+
+  // Initialize theme
+  initTheme();
 
   // Render lists
   renderServersList();
@@ -201,6 +260,12 @@ function setupEventListeners() {
   });
 
   // General settings changes
+  elements.themeSelect.addEventListener('change', (e) => {
+    const mode = e.target.value;
+    chrome.storage.local.set({ theme: mode });
+    applyTheme(mode);
+  });
+
   elements.defaultFilename.addEventListener('change', () => {
     config.defaultFilename = elements.defaultFilename.value;
     saveConfig();

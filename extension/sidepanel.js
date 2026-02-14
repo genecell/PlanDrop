@@ -112,6 +112,107 @@ const LEGACY_PROFILE_MAP = {
   'full-access': 'full_access'
 };
 
+// ============================================
+// Theme Management
+// ============================================
+
+/**
+ * Initialize theme on load
+ */
+function initTheme() {
+  chrome.storage.local.get('theme', (result) => {
+    const mode = result.theme || 'auto';
+    applyTheme(mode);
+    updateThemeIcon(mode);
+  });
+
+  // Listen for OS theme changes (for auto mode)
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+    chrome.storage.local.get('theme', (result) => {
+      const mode = result.theme || 'auto';
+      if (mode === 'auto') {
+        applyTheme('auto');
+      }
+    });
+  });
+
+  // Listen for theme changes from other extension surfaces
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName === 'local' && changes.theme) {
+      const newTheme = changes.theme.newValue || 'auto';
+      applyTheme(newTheme);
+      updateThemeIcon(newTheme);
+    }
+  });
+}
+
+/**
+ * Apply theme to document
+ */
+function applyTheme(mode) {
+  let effectiveTheme;
+
+  if (mode === 'auto') {
+    effectiveTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  } else {
+    effectiveTheme = mode;
+  }
+
+  document.documentElement.setAttribute('data-theme', effectiveTheme);
+}
+
+/**
+ * Cycle through themes: auto -> light -> dark -> auto
+ */
+function cycleTheme() {
+  chrome.storage.local.get('theme', (result) => {
+    const current = result.theme || 'auto';
+    let next;
+
+    if (current === 'auto') next = 'light';
+    else if (current === 'light') next = 'dark';
+    else next = 'auto';
+
+    chrome.storage.local.set({ theme: next });
+    applyTheme(next);
+    updateThemeIcon(next);
+  });
+}
+
+/**
+ * Update theme icon visibility based on current mode
+ */
+function updateThemeIcon(mode) {
+  // Detail view icons
+  const iconLight = document.getElementById('theme-icon-light');
+  const iconDark = document.getElementById('theme-icon-dark');
+  const iconAuto = document.getElementById('theme-icon-auto');
+
+  // Dashboard view icons
+  const dashIconLight = document.getElementById('dashboard-theme-icon-light');
+  const dashIconDark = document.getElementById('dashboard-theme-icon-dark');
+  const dashIconAuto = document.getElementById('dashboard-theme-icon-auto');
+
+  const allIcons = [iconLight, iconDark, iconAuto, dashIconLight, dashIconDark, dashIconAuto];
+
+  // Hide all icons
+  allIcons.forEach(icon => {
+    if (icon) icon.style.display = 'none';
+  });
+
+  // Show appropriate icons based on mode
+  if (mode === 'light') {
+    if (iconLight) iconLight.style.display = 'block';
+    if (dashIconLight) dashIconLight.style.display = 'block';
+  } else if (mode === 'dark') {
+    if (iconDark) iconDark.style.display = 'block';
+    if (dashIconDark) dashIconDark.style.display = 'block';
+  } else {
+    if (iconAuto) iconAuto.style.display = 'block';
+    if (dashIconAuto) dashIconAuto.style.display = 'block';
+  }
+}
+
 // State
 let config = { servers: [] };
 let currentServer = null;
@@ -288,6 +389,9 @@ async function init() {
 
   // Check for tab binding or show dashboard
   await initializeView();
+
+  // Catch up on task status (handles sleep/tab switch recovery)
+  catchUpOnTaskStatus();
 }
 
 /**
@@ -1642,6 +1746,13 @@ function setupEventListeners() {
     chrome.runtime.openOptionsPage();
   });
 
+  // Theme toggle buttons
+  document.getElementById('theme-toggle')?.addEventListener('click', cycleTheme);
+  document.getElementById('dashboard-theme-toggle')?.addEventListener('click', cycleTheme);
+
+  // Initialize theme
+  initTheme();
+
   // Server selection
   elements.serverSelect.addEventListener('change', onServerChange);
 
@@ -2016,6 +2127,50 @@ function updateSendButton() {
 }
 
 /**
+ * Show stop button
+ */
+function showStopButton() {
+  if (elements.stopBtn) {
+    elements.stopBtn.classList.remove('hidden');
+    elements.stopBtn.disabled = false;
+    elements.stopBtn.textContent = '🛑 Stop';
+  }
+  if (elements.sendPlanBtn) {
+    elements.sendPlanBtn.classList.add('hidden');
+  }
+}
+
+/**
+ * Hide stop button
+ */
+function hideStopButton() {
+  if (elements.stopBtn) {
+    elements.stopBtn.classList.add('hidden');
+    elements.stopBtn.disabled = false;
+    elements.stopBtn.textContent = '🛑 Stop';
+  }
+  if (elements.sendPlanBtn) {
+    elements.sendPlanBtn.classList.remove('hidden');
+  }
+}
+
+/**
+ * Show new plan options (Continue in Session / New Task)
+ */
+function showNewPlanOptions() {
+  elements.actionButtons.classList.add('hidden');
+  elements.newPlanContainer.classList.remove('hidden');
+}
+
+/**
+ * Hide action buttons (Execute/Revise/Cancel)
+ */
+function hideActionButtons() {
+  elements.actionButtons.classList.add('hidden');
+  elements.newPlanContainer.classList.add('hidden');
+}
+
+/**
  * Handle Stop button click - interrupt running task
  */
 async function handleStopClick() {
@@ -2027,16 +2182,23 @@ async function handleStopClick() {
     elements.stopBtn.textContent = '⏳ Stopping...';
   }
 
+  // Update shared state
+  await updateChromeStorage({ status: 'stopping' });
+
+  const projectPath = currentProject.path;
+  const sshTarget = getSshTarget();
+  const taskId = currentPlanId;
+
   try {
     // Send interrupt signal to server
     const result = await queuedSendNativeMessage({
       action: 'interrupt',
-      ssh_target: getSshTarget(),
-      remote_path: currentProject.path
+      ssh_target: sshTarget,
+      remote_path: projectPath
     });
 
     if (result.status === 'interrupt_sent') {
-      addActivity('system', '⚠️ Interrupt signal sent — waiting for Claude to stop...');
+      addActivity('system', '⚠️ Interrupt signal sent, waiting for Claude to stop...');
     } else {
       addActivity('system', '❌ Failed to send interrupt: ' + (result.message || 'unknown error'));
       // Re-enable stop button on failure
@@ -2044,6 +2206,8 @@ async function handleStopClick() {
         elements.stopBtn.disabled = false;
         elements.stopBtn.textContent = '🛑 Stop';
       }
+      await updateChromeStorage({ status: 'running' });
+      return;
     }
   } catch (e) {
     addActivity('system', '❌ Failed to send interrupt: ' + (e.message || String(e)));
@@ -2052,9 +2216,138 @@ async function handleStopClick() {
       elements.stopBtn.disabled = false;
       elements.stopBtn.textContent = '🛑 Stop';
     }
+    await updateChromeStorage({ status: 'running' });
+    return;
   }
 
-  // Don't reset UI state here — wait for the poll to detect the interrupted response
+  // Start timeout-based recovery check
+  const STOP_TIMEOUT_MS = 15000;
+  const STOP_POLL_INTERVAL_MS = 2000;
+  const startTime = Date.now();
+
+  const checkStopLoop = setInterval(async () => {
+    // Check if response file has a result (task completed)
+    if (taskId) {
+      try {
+        const responseResult = await queuedSendNativeMessage({
+          action: 'poll_responses',
+          ssh_target: sshTarget,
+          remote_path: projectPath,
+          plan_id: taskId
+        });
+
+        if (responseResult.status === 'ok' && responseResult.content) {
+          const content = responseResult.content;
+          const lines = content.trim().split('\n');
+
+          // Check for result event (task completed)
+          for (const line of lines) {
+            try {
+              const event = JSON.parse(line);
+              if (event.type === 'result') {
+                console.log('[Stop] Task completed with result');
+                clearInterval(checkStopLoop);
+
+                // Process any new content
+                if (content.length > lastResponseLength) {
+                  const newContent = content.substring(lastResponseLength);
+                  lastResponseLength = content.length;
+                  const newLines = newContent.trim().split('\n');
+                  for (const newLine of newLines) {
+                    if (newLine.trim()) {
+                      try {
+                        const newEvent = JSON.parse(newLine);
+                        renderEvent(newEvent);
+                      } catch (e) {
+                        // Skip malformed lines
+                      }
+                    }
+                  }
+                }
+
+                await cleanupTaskState();
+                return;
+              }
+            } catch (e) {
+              // Skip malformed lines
+            }
+          }
+        }
+      } catch (e) {
+        console.log('[Stop] Error checking response:', e);
+      }
+    }
+
+    // Check if timeout reached
+    if (Date.now() - startTime > STOP_TIMEOUT_MS) {
+      clearInterval(checkStopLoop);
+      console.log('[Stop] Timeout reached, checking process status');
+
+      // Check if process is actually still running
+      const pidFile = `${projectPath}/.plandrop/current_task.pid`;
+      try {
+        const pidResult = await queuedSendNativeMessage({
+          action: 'check_file',
+          ssh_target: sshTarget,
+          remote_path: pidFile
+        });
+
+        if (!pidResult.exists) {
+          // Process already gone
+          console.log('[Stop] Process already terminated');
+
+          // Check one more time for response file
+          if (taskId) {
+            const lateResponse = await queuedSendNativeMessage({
+              action: 'poll_responses',
+              ssh_target: sshTarget,
+              remote_path: projectPath,
+              plan_id: taskId
+            });
+
+            if (lateResponse.status === 'ok' && lateResponse.content) {
+              // Process any final content
+              const content = lateResponse.content;
+              if (content.length > lastResponseLength) {
+                const newContent = content.substring(lastResponseLength);
+                lastResponseLength = content.length;
+                const lines = newContent.trim().split('\n');
+                for (const line of lines) {
+                  if (line.trim()) {
+                    try {
+                      const event = JSON.parse(line);
+                      renderEvent(event);
+                    } catch (e) {
+                      // Skip malformed lines
+                    }
+                  }
+                }
+              }
+            } else {
+              addActivity('system', '⚠️ Task ended without a response.');
+            }
+          }
+
+          await cleanupTaskState();
+        } else {
+          // Process still running despite interrupt
+          console.log('[Stop] Process still running after timeout');
+          addActivity('system', '⚠️ Task is not responding to interrupt. You may need to manually stop it on the server.');
+
+          // Re-enable stop button for retry
+          if (elements.stopBtn) {
+            elements.stopBtn.disabled = false;
+            elements.stopBtn.textContent = '🛑 Stop';
+          }
+          await updateChromeStorage({ status: 'running' });
+        }
+      } catch (e) {
+        console.log('[Stop] Error checking PID:', e);
+        addActivity('system', '⚠️ Could not verify task status.');
+        await cleanupTaskState();
+      }
+    }
+  }, STOP_POLL_INTERVAL_MS);
 }
 
 // ============================================
@@ -2712,6 +3005,9 @@ function renderResult(event) {
     // Stop polling
     stopPolling();
 
+    // Sync interrupted state to shared storage
+    updateChromeStorage({ status: 'completed', result: { interrupted: true } });
+
     // Show completion actions so user can start a new task
     showCompleteActions();
     return;
@@ -2796,6 +3092,12 @@ function renderResult(event) {
       lastTimestamp: new Date().toISOString()
     });
   }
+
+  // Sync completion state to shared storage
+  updateChromeStorage({
+    status: 'completed',
+    result: { cost: cost, duration: duration }
+  });
 }
 
 /**
@@ -3055,6 +3357,361 @@ function clearActivityStorage() {
   activityHistory = [];
 }
 
+// ============================================
+// FIX 3: SHARED STATE VIA CHROME.STORAGE.LOCAL
+// ============================================
+
+// Track last local update timestamp to avoid infinite loops
+let lastLocalUpdate = 0;
+const MAX_ACTIVITY_LOG_ENTRIES = 200;
+
+/**
+ * Update shared state in chrome.storage.local
+ * All side panel instances read/write to the same 'plandropState' key
+ */
+async function updateChromeStorage(stateUpdate) {
+  try {
+    const current = await chrome.storage.local.get('plandropState');
+    const currentState = current.plandropState || {};
+
+    // Merge the update
+    const newState = {
+      ...currentState,
+      ...stateUpdate,
+      lastUpdated: Date.now()
+    };
+
+    // Trim activity log if too large
+    if (newState.activityLog && newState.activityLog.length > MAX_ACTIVITY_LOG_ENTRIES) {
+      newState.activityLog = newState.activityLog.slice(-MAX_ACTIVITY_LOG_ENTRIES);
+    }
+
+    lastLocalUpdate = newState.lastUpdated;
+    await chrome.storage.local.set({ plandropState: newState });
+  } catch (e) {
+    console.log('[SharedState] Failed to update chrome.storage:', e);
+  }
+}
+
+/**
+ * Get shared state from chrome.storage.local
+ */
+async function getChromeStorageState() {
+  try {
+    const data = await chrome.storage.local.get('plandropState');
+    return data.plandropState || null;
+  } catch (e) {
+    console.log('[SharedState] Failed to get chrome.storage:', e);
+    return null;
+  }
+}
+
+/**
+ * Clear shared state (on reset)
+ */
+async function clearChromeStorageState() {
+  try {
+    lastLocalUpdate = Date.now();
+    await chrome.storage.local.set({
+      plandropState: {
+        status: 'idle',
+        taskId: null,
+        result: null,
+        activityLog: [],
+        lastUpdated: lastLocalUpdate
+      }
+    });
+  } catch (e) {
+    console.log('[SharedState] Failed to clear chrome.storage:', e);
+  }
+}
+
+/**
+ * Restore UI from shared state (called when another tab updates state)
+ */
+function restoreUIFromState(state) {
+  if (!state) return;
+
+  console.log('[SharedState] Restoring UI from state:', state.status);
+
+  // Set server/project dropdowns if they match
+  if (state.server && state.project && currentServer && currentProject) {
+    // Only restore activity if same server/project
+    if (state.server === currentServer.id && state.project === currentProject.id) {
+      // Restore activity feed
+      if (state.activityLog && state.activityLog.length > 0) {
+        elements.activityFeed.innerHTML = '';
+        activityHistory = [];
+        for (const activity of state.activityLog) {
+          renderActivityItem(activity.type, activity.content, activity.isMarkdown);
+          activityHistory.push(activity);
+        }
+        scrollToBottom();
+      }
+
+      // Restore session
+      if (state.sessionId) {
+        sessionId = state.sessionId;
+        elements.sessionIdDisplay.textContent = sessionId.substring(0, 8) + '...';
+      }
+
+      // Restore task state
+      if (state.taskId) {
+        currentPlanId = state.taskId;
+      }
+    }
+  }
+
+  // Set button state based on status
+  switch (state.status) {
+    case 'running':
+      currentPhase = 'execute';
+      updatePhaseIndicator('execute');
+      showStopButton();
+      if (!pollingTimer && currentPlanId) {
+        startPolling();
+      }
+      break;
+    case 'stopping':
+      if (elements.stopBtn) {
+        elements.stopBtn.disabled = true;
+        elements.stopBtn.textContent = '⏳ Stopping...';
+      }
+      break;
+    case 'completed':
+      currentPhase = null;
+      updatePhaseIndicator(null);
+      hideStopButton();
+      if (state.result) {
+        // Result already displayed via activity log
+      }
+      showNewPlanOptions();
+      break;
+    case 'idle':
+    default:
+      currentPhase = null;
+      updatePhaseIndicator(null);
+      hideStopButton();
+      hideActionButtons();
+      break;
+  }
+}
+
+/**
+ * Listen for changes from other tabs
+ */
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === 'local' && changes.plandropState) {
+    const newState = changes.plandropState.newValue;
+    const oldState = changes.plandropState.oldValue || {};
+
+    // Only update UI if the change came from a different tab
+    if (newState && newState.lastUpdated !== lastLocalUpdate) {
+      console.log('[SharedState] Received update from another tab');
+      restoreUIFromState(newState);
+    }
+  }
+});
+
+/**
+ * Sync current state to chrome.storage (call after state changes)
+ */
+function syncStateToStorage() {
+  if (!currentServer || !currentProject) return;
+
+  const status = currentPhase === 'execute' ? 'running' :
+                 currentPhase === 'plan' ? 'planning' : 'idle';
+
+  // Build activity log for storage (trimmed version)
+  const activityLog = activityHistory.map(item => ({
+    type: item.type,
+    content: item.content.substring(0, 500), // Trim long content
+    isMarkdown: item.isMarkdown,
+    timestamp: item.timestamp
+  }));
+
+  updateChromeStorage({
+    server: currentServer.id,
+    project: currentProject.id,
+    projectPath: currentProject.path,
+    taskId: currentPlanId,
+    status: status,
+    sessionId: sessionId,
+    activityLog: activityLog
+  });
+}
+
+// ============================================
+// FIX 2: CATCH UP ON RECONNECT
+// ============================================
+
+/**
+ * Catch up on task status when panel becomes visible again
+ * Handles cases where task completed while panel was sleeping/hidden
+ */
+async function catchUpOnTaskStatus() {
+  console.log('[CatchUp] Checking task status after visibility change');
+
+  // First, read last known state from chrome.storage
+  const savedState = await getChromeStorageState();
+
+  // If no active task was tracked, nothing to catch up on
+  if (!savedState || !savedState.taskId || savedState.status === 'idle') {
+    console.log('[CatchUp] No active task to catch up on');
+    if (savedState) {
+      restoreUIFromState(savedState);
+    }
+    return;
+  }
+
+  // There was an active task. Check server for its current status.
+  const taskId = savedState.taskId;
+  const projectPath = savedState.projectPath;
+
+  if (!currentServer || !currentProject) {
+    console.log('[CatchUp] No server/project selected');
+    return;
+  }
+
+  console.log(`[CatchUp] Checking task ${taskId} status on server`);
+
+  // Show checking status
+  updateStatus('checking', 'Checking server...');
+
+  try {
+    // Check if response file exists (task completed while we were away)
+    const responseFile = `${projectPath}/.plandrop/responses/${taskId}.jsonl`;
+    const responseResult = await queuedSendNativeMessage({
+      action: 'poll_responses',
+      ssh_target: getSshTarget(),
+      remote_path: projectPath,
+      plan_id: taskId
+    });
+
+    if (responseResult.status === 'ok' && responseResult.content) {
+      // Task has response content
+      const content = responseResult.content;
+
+      if (savedState.status === 'running' || savedState.status === 'stopping') {
+        // Check if task is complete by looking for result event
+        const lines = content.trim().split('\n');
+        let isComplete = false;
+
+        for (const line of lines) {
+          try {
+            const event = JSON.parse(line);
+            if (event.type === 'result') {
+              isComplete = true;
+              break;
+            }
+          } catch (e) {
+            // Skip malformed lines
+          }
+        }
+
+        if (isComplete) {
+          console.log('[CatchUp] Task completed while panel was sleeping');
+          // Update shared state
+          await updateChromeStorage({
+            ...savedState,
+            status: 'completed'
+          });
+
+          // Process any new content we missed
+          currentPlanId = taskId;
+          if (content.length > lastResponseLength) {
+            const newContent = content.substring(lastResponseLength);
+            lastResponseLength = content.length;
+
+            const newLines = newContent.trim().split('\n');
+            for (const line of newLines) {
+              if (line.trim()) {
+                try {
+                  const event = JSON.parse(line);
+                  renderEvent(event);
+                } catch (e) {
+                  // Skip malformed lines
+                }
+              }
+            }
+          }
+
+          stopPolling();
+          hideStopButton();
+          showNewPlanOptions();
+          return;
+        }
+      }
+    }
+
+    // Check if task is still running
+    if (savedState.status === 'running') {
+      // Check if process exists (PID file)
+      const pidFile = `${projectPath}/.plandrop/current_task.pid`;
+      const pidResult = await queuedSendNativeMessage({
+        action: 'check_file',
+        ssh_target: getSshTarget(),
+        remote_path: pidFile
+      });
+
+      if (pidResult.status === 'success' && pidResult.exists) {
+        // Task still running, resume polling
+        console.log('[CatchUp] Task still running, resuming polling');
+        currentPlanId = taskId;
+        currentPhase = 'execute';
+        updatePhaseIndicator('execute');
+        showStopButton();
+        startPolling();
+        startHeartbeatTimer();
+        checkHeartbeat();
+      } else {
+        // Process gone but no complete response
+        console.log('[CatchUp] Task ended unexpectedly (no PID file)');
+        addActivity('system', '⚠️ Task ended unexpectedly.');
+        await cleanupTaskState();
+      }
+      return;
+    }
+
+    // For other states (completed, error), just restore the UI
+    restoreUIFromState(savedState);
+    checkHeartbeat();
+
+  } catch (e) {
+    console.log('[CatchUp] Error checking server:', e);
+    // Fall back to restoring from storage
+    restoreUIFromState(savedState);
+    checkHeartbeat();
+  }
+}
+
+// ============================================
+// FIX 1: STOP BUTTON CLEANUP
+// ============================================
+
+/**
+ * Clean up task state after task ends
+ * Note: Server-side file cleanup is handled by watch.sh
+ */
+async function cleanupTaskState() {
+  console.log('[Cleanup] Cleaning up task state');
+
+  // Reset UI state
+  stopPolling();
+  hideStopButton();
+  currentPhase = null;
+  currentPlanId = null;
+  updatePhaseIndicator(null);
+
+  // Update shared state
+  await updateChromeStorage({
+    status: 'idle',
+    taskId: null
+  });
+
+  showNewPlanOptions();
+}
+
 /**
  * Show plan phase action buttons
  */
@@ -3139,6 +3796,9 @@ function startNewTask() {
     elements.sessionIdDisplay.textContent = `Session: ${sessionId.substring(0, 8)}...`;
   }
 
+  // Sync idle state to shared storage
+  updateChromeStorage({ status: 'idle', taskId: null, activityLog: [] });
+
   // Focus input
   elements.messageInput.focus();
   updateSendButton();
@@ -3220,6 +3880,9 @@ async function resetSession() {
     elements.sessionIdDisplay.textContent = 'No session';
 
     addActivity('system', 'Session reset successfully');
+
+    // Clear shared state
+    await clearChromeStorageState();
 
   } catch (e) {
     console.error('Reset session error:', e);
@@ -3403,6 +4066,7 @@ async function sendPlan() {
       elements.messageInput.value = '';
       showLoading('Waiting for Claude...');
       startPolling();
+      syncStateToStorage(); // Sync to shared state
     } else {
       addActivity('system', 'Error: ' + (result.message || 'Unknown error'));
       currentPlanId = null;
@@ -3485,7 +4149,9 @@ async function executePlan() {
     if (result.status === 'success') {
       addActivity('user-action', 'Execute plan');
       showLoading('Executing...');
+      showStopButton();
       startPolling();
+      syncStateToStorage(); // Sync to shared state
     } else {
       addActivity('system', 'Error: ' + (result.message || 'Unknown error'));
       updatePhaseIndicator(null);
@@ -3926,13 +4592,14 @@ window.addEventListener('beforeunload', () => {
   }
 });
 
-// Also release lock when visibility changes (tab hidden for long time)
+// Handle visibility changes (tab hidden/shown)
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     // Tab is hidden - stop refreshing lock (will expire naturally if tab stays hidden)
     stopLockRefresh();
   } else {
-    // Tab is visible again - try to re-acquire lock
+    // Tab is visible again - catch up on task status and re-acquire lock
+    catchUpOnTaskStatus();
     if (currentProject) {
       acquireProjectLock();
     }

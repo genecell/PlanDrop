@@ -3,6 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <title>PlanDrop Settings</title>
+  <script>
+    // Prevent flash of wrong theme
+    (function() {
+      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+  </script>
   <link rel="stylesheet" href="options.css">
 </head>
 <body>
@@ -215,6 +223,16 @@
       <!-- General Settings -->
       <section class="section">
         <h2>General Settings</h2>
+
+        <div class="form-group">
+          <label for="theme-select">Theme</label>
+          <select id="theme-select">
+            <option value="auto">Auto (system)</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+          <span class="help-text">Auto follows your operating system preference.</span>
+        </div>
 
         <div class="form-group">
           <label for="default-filename">Default Filename</label>

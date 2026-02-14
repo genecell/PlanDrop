@@ -208,6 +208,7 @@ Running Claude Code on three different projects across two servers? PlanDrop rem
 - Right-click context menu: "Send selection to PlanDrop"
 - Cross-platform: macOS, Linux, Windows
 - Works with Chrome, Edge, Brave, Arc
+- Dark mode (auto, light, dark)
 
 ---
 
@@ -617,7 +618,6 @@ git pull
 
 **Planned:**
 - Chrome Web Store release
-- Dark mode
 - Template system for common prompts
 - MCP server integration
 - Multi-agent orchestration across servers

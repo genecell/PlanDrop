@@ -3,6 +3,53 @@
  * Handles UI logic for the main popup
  */
 
+// ============================================
+// Theme Management
+// ============================================
+
+/**
+ * Initialize theme on load
+ */
+function initTheme() {
+  chrome.storage.local.get('theme', (result) => {
+    const mode = result.theme || 'auto';
+    applyTheme(mode);
+  });
+
+  // Listen for OS theme changes (for auto mode)
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+    chrome.storage.local.get('theme', (result) => {
+      const mode = result.theme || 'auto';
+      if (mode === 'auto') {
+        applyTheme('auto');
+      }
+    });
+  });
+
+  // Listen for theme changes from other extension surfaces
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName === 'local' && changes.theme) {
+      const newTheme = changes.theme.newValue || 'auto';
+      applyTheme(newTheme);
+    }
+  });
+}
+
+/**
+ * Apply theme to document
+ */
+function applyTheme(mode) {
+  let effectiveTheme;
+
+  if (mode === 'auto') {
+    effectiveTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  } else {
+    effectiveTheme = mode;
+  }
+
+  document.documentElement.setAttribute('data-theme', effectiveTheme);
+}
+
 /**
  * Debounce helper - must be defined before use
  */
@@ -67,6 +114,9 @@ async function init() {
 
   // Setup event listeners
   setupEventListeners();
+
+  // Initialize theme
+  initTheme();
 
   // Initial UI update
   updateUI();

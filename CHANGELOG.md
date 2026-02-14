@@ -2,6 +2,21 @@
 
 All notable changes to PlanDrop will be documented in this file.
 
+## 2.0.1
+
+### New
+- Dark mode with Auto/Light/Dark modes (Auto follows OS preference)
+- Theme toggle in side panel header and settings page
+- Activity feed colors harmonized for dark backgrounds
+
+### Fixed
+- Side panel recovers task state after tab switch or laptop sleep
+- Stop button no longer stuck when task already completed on server
+- Interrupt has 15-second timeout with automatic recovery
+- Shared state across all side panel instances via chrome.storage
+- All open side panels stay in sync
+- Website domain updated to plandrop.ai
+
 ## [2.0.0] - 2026-02-11
 
 ### Added
